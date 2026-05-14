@@ -197,6 +197,44 @@ final class ContractTests: XCTestCase {
         }
     }
 
+    func testSystemScreencaptureScreenArgumentsAreDeterministic() throws {
+        let arguments = try XCTUnwrap(PBMSystemScreencapture.screenArguments(
+            path: "/tmp/pbm.png",
+            displayID: 42,
+            explicitDisplay: true,
+            cursor: true,
+            mainDisplayID: 1,
+            activeDisplayIDs: [1, 42],
+        ))
+        XCTAssertEqual(arguments, ["-x", "-t", "png", "-D", "2", "-C", "/tmp/pbm.png"])
+
+        let mainFallback = try XCTUnwrap(PBMSystemScreencapture.screenArguments(
+            path: "/tmp/main.png",
+            displayID: 1,
+            explicitDisplay: false,
+            cursor: false,
+            mainDisplayID: 1,
+            activeDisplayIDs: [],
+        ))
+        XCTAssertEqual(mainFallback, ["-x", "-t", "png", "-m", "/tmp/main.png"])
+
+        XCTAssertNil(PBMSystemScreencapture.screenArguments(
+            path: "/tmp/missing.png",
+            displayID: 99,
+            explicitDisplay: true,
+            cursor: false,
+            mainDisplayID: 1,
+            activeDisplayIDs: [],
+        ))
+    }
+
+    func testSystemScreencaptureWindowArgumentsUseFixedExecutableArguments() {
+        XCTAssertEqual(
+            PBMSystemScreencapture.windowArguments(path: "/tmp/window.png", windowID: 123),
+            ["-l", "123", "-o", "-x", "-t", "png", "/tmp/window.png"],
+        )
+    }
+
     private func assertStableEnvelope(_ envelope: [String: Any], ok: Bool, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertEqual(envelope["schemaVersion"] as? String, pbmStableSchemaVersion, file: file, line: line)
         XCTAssertEqual(envelope["ok"] as? Bool, ok, file: file, line: line)

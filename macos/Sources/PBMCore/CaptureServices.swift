@@ -3,6 +3,7 @@ import CoreGraphics
 import CoreImage
 import CoreMedia
 import Foundation
+import ImageIO
 @preconcurrency import ScreenCaptureKit
 
 enum PBMObserve {
@@ -26,46 +27,63 @@ enum PBMObserve {
             var strategy = "ScreenCaptureKit.SCScreenshotManager"
             switch mode {
             case "display", "screen":
+                let explicitDisplay = args.options.keys.contains("display-id") || args.options.keys.contains("display")
                 let displayID = CGDirectDisplayID(args.int("display-id") ?? args.int("display") ?? Int(CGMainDisplayID()))
-                let content = try PBMVideoRecorder.waitForShareableContent()
-                guard let display = content.displays.first(where: { $0.displayID == displayID }) ?? content.displays.first else {
-                    return .failure(code: "target_not_found", message: "Display was not found.", details: ["displayID": Int(displayID)])
+                var fallbackReason: String?
+                if
+                    let content = try? PBMVideoRecorder.waitForShareableContent(),
+                    let display = content.displays.first(where: { $0.displayID == displayID }) ?? content.displays.first
+                {
+                    let filter = SCContentFilter(display: display, excludingWindows: [])
+                    let config = SCStreamConfiguration()
+                    config.width = display.width
+                    config.height = display.height
+                    config.showsCursor = args.bool("cursor", fallback: true)
+                    let capture = try captureImage(filter: filter, config: config)
+                    image = capture.image
+                    strategy = capture.strategy
+                    let bounds = CGRect(x: 0, y: 0, width: CGFloat(display.width), height: CGFloat(display.height))
+                    metadata["display"] = [
+                        "id": Int(display.displayID),
+                        "bounds": PBMNative.rectDict(bounds),
+                        "scale": filter.pointPixelScale,
+                    ]
+                } else {
+                    fallbackReason = "ScreenCaptureKit did not enumerate the requested display."
+                    guard let arguments = PBMSystemScreencapture.screenArguments(
+                        path: url.path,
+                        displayID: displayID,
+                        explicitDisplay: explicitDisplay,
+                        cursor: args.bool("cursor", fallback: true),
+                    ) else {
+                        return .failure(code: "target_not_found", message: "Display was not found.", details: ["displayID": Int(displayID)])
+                    }
+                    let capture = try PBMSystemScreencapture.capture(arguments: arguments, outputURL: url)
+                    image = capture.image
+                    strategy = capture.strategy
+                    metadata["display"] = PBMSystemScreencapture.displayMetadata(displayID: displayID, image: capture.image)
                 }
-                let filter = SCContentFilter(display: display, excludingWindows: [])
-                let config = SCStreamConfiguration()
-                config.width = display.width
-                config.height = display.height
-                config.showsCursor = args.bool("cursor", fallback: true)
-                let capture = try captureImage(filter: filter, config: config)
-                image = capture.image
-                strategy = capture.strategy
-                let bounds = CGRect(x: 0, y: 0, width: CGFloat(display.width), height: CGFloat(display.height))
-                metadata["display"] = [
-                    "id": Int(display.displayID),
-                    "bounds": PBMNative.rectDict(bounds),
-                    "scale": filter.pointPixelScale,
-                ]
+                if let fallbackReason {
+                    metadata["fallbackReason"] = fallbackReason
+                }
             case "window":
                 guard let windowID = args.int("window-id") ?? args.int("windowId") ?? args.int("handle") else {
                     return .failure(code: "invalid_argument.missing_window", message: "--window-id is required for --mode window.", exitCode: 2)
                 }
-                let content = try PBMVideoRecorder.waitForShareableContent()
-                guard let window = content.windows.first(where: { Int($0.windowID) == windowID }) else {
+                guard let window = PBMNative.windowList(onScreenOnly: false).first(where: { ($0["windowId"] as? Int) == windowID }) else {
                     return .failure(code: "target_not_found", message: "Window was not found for capture.", details: ["windowId": windowID])
                 }
-                let filter = SCContentFilter(desktopIndependentWindow: window)
-                let config = SCStreamConfiguration()
-                config.width = max(1, Int(window.frame.width * CGFloat(filter.pointPixelScale)))
-                config.height = max(1, Int(window.frame.height * CGFloat(filter.pointPixelScale)))
-                config.showsCursor = args.bool("cursor", fallback: true)
-                let capture = try captureImage(filter: filter, config: config)
+                let capture = try PBMSystemScreencapture.capture(
+                    arguments: PBMSystemScreencapture.windowArguments(path: url.path, windowID: windowID),
+                    outputURL: url,
+                )
                 image = capture.image
                 strategy = capture.strategy
                 metadata["windowId"] = windowID
                 metadata["window"] = [
                     "windowId": windowID,
-                    "bounds": PBMNative.rectDict(window.frame),
-                    "scale": filter.pointPixelScale,
+                    "bounds": window["bounds"] as? [String: Any] ?? [:],
+                    "scale": PBMSystemScreencapture.scaleFromWindow(window, image: capture.image),
                 ]
             default:
                 return .failure(code: "invalid_argument.capture_mode", message: "Unsupported image mode.", details: ["mode": mode], exitCode: 2)
@@ -84,6 +102,9 @@ enum PBMObserve {
         } catch {
             if PBMObserve.isScreenCapturePermissionError(error) {
                 return permissionDeniedScreenRecording(error: error)
+            }
+            if let captureError = error as? PBMSystemCaptureError, captureError.windowNotFound {
+                return .failure(code: "target_not_found", message: "Window was not found for capture.", details: ["nativeError": captureError.localizedDescription])
             }
             return .failure(code: "internal.capture_image", message: error.localizedDescription)
         }
@@ -297,6 +318,127 @@ enum PBMObserve {
             }
             return object
         }
+    }
+}
+
+struct PBMSystemCaptureError: LocalizedError {
+    let message: String
+    let terminationStatus: Int32?
+
+    var errorDescription: String? {
+        message
+    }
+
+    var windowNotFound: Bool {
+        message.localizedCaseInsensitiveContains("could not create image from window")
+    }
+}
+
+enum PBMSystemScreencapture {
+    struct CapturedImage {
+        let image: CGImage
+        let strategy: String
+    }
+
+    static func screenArguments(
+        path: String,
+        displayID: CGDirectDisplayID,
+        explicitDisplay: Bool,
+        cursor: Bool,
+        mainDisplayID: CGDirectDisplayID = CGMainDisplayID(),
+        activeDisplayIDs: [CGDirectDisplayID]? = nil,
+    ) -> [String]? {
+        var arguments = ["-x", "-t", "png"]
+        let displayIDs = activeDisplayIDs ?? activeDisplays()
+        if !explicitDisplay {
+            arguments.append("-m")
+        } else if let index = displayIDs.firstIndex(of: displayID) {
+            arguments.append(contentsOf: ["-D", String(index + 1)])
+        } else if displayID == mainDisplayID {
+            arguments.append("-m")
+        } else {
+            return nil
+        }
+        if cursor {
+            arguments.append("-C")
+        }
+        arguments.append(path)
+        return arguments
+    }
+
+    static func windowArguments(path: String, windowID: Int) -> [String] {
+        ["-l", String(windowID), "-o", "-x", "-t", "png", path]
+    }
+
+    static func capture(arguments: [String], outputURL: URL) throws -> CapturedImage {
+        try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try FileManager.default.removeItem(at: outputURL)
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        process.arguments = arguments
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+
+        let outputText = [
+            stdout.fileHandleForReading.readDataToEndOfFile(),
+            stderr.fileHandleForReading.readDataToEndOfFile(),
+        ]
+        .compactMap { String(data: $0, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n")
+
+        guard process.terminationStatus == 0 else {
+            try? FileManager.default.removeItem(at: outputURL)
+            let message = outputText.isEmpty ? "screencapture exited with \(process.terminationStatus)" : outputText
+            throw PBMSystemCaptureError(message: message, terminationStatus: process.terminationStatus)
+        }
+
+        let data = try Data(contentsOf: outputURL)
+        guard
+            let source = CGImageSourceCreateWithData(data as CFData, nil),
+            let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else {
+            throw PBMSystemCaptureError(message: "Failed to decode screencapture output.", terminationStatus: nil)
+        }
+        return CapturedImage(image: image, strategy: "system.screencapture")
+    }
+
+    static func displayMetadata(displayID: CGDirectDisplayID, image: CGImage) -> [String: Any] {
+        let bounds = CGDisplayBounds(displayID)
+        let scale = bounds.width > 0 ? Double(image.width) / Double(bounds.width) : 1.0
+        return [
+            "id": Int(displayID),
+            "bounds": PBMNative.rectDict(bounds),
+            "scale": scale,
+            "coordinateSpace": "logicalPoints",
+        ]
+    }
+
+    static func scaleFromWindow(_ window: [String: Any], image: CGImage) -> Double {
+        guard
+            let bounds = window["bounds"] as? [String: Any],
+            let width = bounds.double("width"),
+            width > 0
+        else {
+            return 1.0
+        }
+        return Double(image.width) / width
+    }
+
+    private static func activeDisplays() -> [CGDirectDisplayID] {
+        var count: UInt32 = 0
+        CGGetActiveDisplayList(0, nil, &count)
+        guard count > 0 else { return [] }
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        CGGetActiveDisplayList(count, &ids, &count)
+        return Array(ids.prefix(Int(count)))
     }
 }
 

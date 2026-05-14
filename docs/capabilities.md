@@ -5,7 +5,8 @@ The macOS v1 implementation is deterministic and public-API-only. It does not fa
 ## Implemented Native Paths
 
 - `AXUIElement`: UI traversal, focused element value setting, focused action execution, menu traversal/click where apps expose AX.
-- `ScreenCaptureKit`: display/window image capture and direct duration video capture.
+- `ScreenCaptureKit`: display image capture when displays are enumerated, and direct duration video capture.
+- Apple `/usr/sbin/screencapture`: local fixed-path fallback for image capture when ScreenCaptureKit does not enumerate displays or when capturing by WindowServer window ID. `pbm` invokes it directly with argument arrays and never exposes a shell-execution tool.
 - `CGEvent`: click, type, key, hotkey, scroll, drag, move.
 - `NSWorkspace` / `NSRunningApplication`: app listing, launch, focus, switch, quit, hide, unhide, relaunch, open URL/file.
 - `NSPasteboard`: clipboard get/set/clear.
@@ -17,6 +18,7 @@ The macOS v1 implementation is deterministic and public-API-only. It does not fa
 - AX children include public alternate child attributes such as visible children, web area children, navigation children, layout/group contents, rows, columns, tabs, `AXWindows`, and the focused element.
 - Target resolution prefers explicit IDs and exact matches before fuzzy matches, and returns structured `target_ambiguous`, `target_not_found`, `stale_snapshot`, or `invalid_argument.conflicting_target` errors.
 - Screen Recording status combines CoreGraphics preflight with a ScreenCaptureKit shareable-content probe for CLI reliability.
+- Image capture falls back to the native `screencapture` utility when ScreenCaptureKit reports windows but no displays, matching the macOS behavior observed in direct CLI sessions.
 - Window inventory records renderability metadata and default window selection scores usable layer-0 visible windows above utility entries.
 - Input move/drag paths are deterministic linear paths; no randomized humanization or agent planning is used.
 - Clipboard operations support typed NSPasteboard data, Base64 export, file import/export, and size guards.

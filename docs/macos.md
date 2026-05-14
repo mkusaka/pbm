@@ -3,7 +3,7 @@
 `pbm` v1 is a Swift Package for macOS 15+. It uses public native APIs only:
 
 - Accessibility: `AXUIElement`
-- Capture: `ScreenCaptureKit` and CoreGraphics permission preflight
+- Capture: `ScreenCaptureKit`, CoreGraphics permission preflight, and Apple `screencapture` image fallback for direct CLI sessions
 - Input: `CGEvent`
 - App control: `NSWorkspace` and `NSRunningApplication`
 - Clipboard: `NSPasteboard`
@@ -39,7 +39,7 @@ Release and bottle details are in [Homebrew](homebrew.md).
 Grant permissions to the executable you run, or to a future signed Bridge app.
 
 - Accessibility: required for AX traversal, menu/dialog operations, window mutation, set-value, and perform-action.
-- Screen Recording: required for screenshot and ScreenCaptureKit video capture.
+- Screen Recording: required for screenshot and ScreenCaptureKit video capture. Direct CLI image capture may use the Apple `screencapture` fallback when ScreenCaptureKit cannot enumerate displays.
 - Input Monitoring / event posting: required for CGEvent input synthesis.
 - Clipboard: `NSPasteboard` access may be mediated by macOS. Clipboard clear is destructive and requires confirmation by default.
 
