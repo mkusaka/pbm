@@ -36,10 +36,15 @@ The property set is intentionally shared and conservative. Unknown properties ar
 - `pid`: exact process id.
 - `app`: running app name substring.
 - `scope`: `frontmost` or `allApps`.
+- `window-id` / `window-title` / `window-index`: window-scoped AX traversal.
 - `max-depth` / `maxDepth`: per-call AX traversal depth.
 - `max-elements` / `maxElementCount`: per-call element limit.
+- `max-children` / `maxChildren`: per-node child cap.
+- `timeout` / `timeout-seconds`: traversal deadline.
 
-Pass only one target selector. Conflicts return `invalid_argument.conflicting_snapshot_target`; multiple app-name matches return `target_ambiguous`.
+Pass only one app target selector. Conflicts return `invalid_argument.conflicting_snapshot_target`; multiple app-name or window-title matches return `target_ambiguous`.
+
+Input and semantic tools expose snapshot target selectors such as `target`, `target-text`, `target-title`, `automation-id`, `role`, and `index`; semantic tools also expose `value`, `action`, and `focused`. Window tools expose `window-id`, `windowId`, and `handle`. Clipboard tools expose typed data options such as `type`, `uti`, `base64`, `output-path`, `file-path`, `data-base64`, and `max-bytes`.
 
 ## Example
 

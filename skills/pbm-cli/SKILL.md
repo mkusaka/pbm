@@ -11,7 +11,9 @@ Use `pbm` for deterministic macOS desktop automation. It is not an AI agent and 
 
 - Prefer `pbm see` for Accessibility-tree state before using screenshots.
 - Use `pbm see --bundle-id <bundle-id>` or the alias `pbm see --app-id <bundle-id>`, `pbm see --pid <pid>`, `pbm see --app <name>`, or `pbm see --scope allApps` when the target is not the frontmost app.
-- Pass only one snapshot target selector. If `target_ambiguous` is returned, retry with `--pid` or `--bundle-id`.
+- For non-frontmost windows, prefer `pbm see --bundle-id <bundle-id> --window-id <id>` after `pbm window list`; use `--window-title` only when it is unique.
+- Pass only one app/window snapshot selector. If `target_ambiguous` is returned, retry with `--pid`, `--bundle-id`, or `--window-id`.
+- Use snapshot element IDs first. Query selectors such as `--target-text`, `--target-title`, `--automation-id`, `--role`, and `--index` are fallback paths and must be treated as potentially ambiguous.
 - Use `pbm image --mode screen --path <path>` only when visual layout or coordinates are needed.
 - Treat every command result as authoritative only after checking `ok`, `schemaVersion`, and either `data` or `error`.
 - Do not invent success for `capability_unavailable.*`, `permission_denied.*`, `target_not_found`, or `target_ambiguous`.
@@ -23,18 +25,22 @@ Use `pbm` for deterministic macOS desktop automation. It is not an AI agent and 
 
 ```sh
 pbm doctor
+pbm --version
 pbm see
 pbm see --bundle-id com.google.Chrome
+pbm see --bundle-id com.google.Chrome --window-id 12345
 pbm see --app-id com.google.Chrome
 pbm see --scope allApps --max-elements 2000
 pbm image --mode screen --path /tmp/pbm-screen.png
 pbm click --target B1
+pbm click --target-text "Send"
 pbm click --x 100 --y 200
 pbm type --text "hello"
 pbm hotkey --keys cmd+l
 pbm window list
 pbm app list
 pbm clipboard get
+pbm clipboard get --type public.png --output /tmp/clipboard.png
 pbm snapshot list
 pbm mcp
 ```

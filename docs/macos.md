@@ -14,6 +14,7 @@
 ```sh
 swift build
 swift test
+.build/debug/pbm --version
 ```
 
 The executable is generated at:
@@ -49,9 +50,11 @@ pbm bridge open
 swift build
 swift test
 pbm doctor
+pbm --version
 pbm config validate
 pbm see
 pbm see --bundle-id com.google.Chrome
+pbm see --bundle-id com.google.Chrome --window-title Inbox --max-children 50 --timeout 5
 pbm see --scope allApps --max-elements 2000
 pbm image --mode screen --path /tmp/pbm-screen.png
 pbm snapshot list
@@ -81,10 +84,14 @@ pbm see --app-id com.google.Chrome
 pbm see --pid 12345
 pbm see --app Chrome
 pbm see --scope allApps --max-elements 2000
+pbm see --bundle-id com.google.Chrome --window-id 12345
+pbm see --bundle-id com.google.Chrome --window-title Inbox
 ```
 
 The snapshot metadata records the requested scope, matched applications, traversal depth, element limit, and whether traversal was truncated.
-Pass only one target selector. Ambiguous app-name matches are reported as `target_ambiguous` instead of choosing one implicitly.
+Pass only one app target selector. Ambiguous app-name or window-title matches are reported as `target_ambiguous` instead of choosing one implicitly.
+
+The AX traversal path is bounded for CLI reliability: bulk attribute reads are used where public APIs allow, visited elements are tracked, children are capped per node, alternate child attributes are inspected, and `AXWindows` / focused elements are included when configured. Defaults are `maxDepth=12`, `maxElementCount=400`, `maxChildrenPerNode=50`, and `timeoutSeconds=8`.
 
 ## Modes
 

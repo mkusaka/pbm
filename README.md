@@ -15,6 +15,7 @@ Failures use the same envelope with structured error codes. Commands do not call
 ```sh
 swift build
 swift test
+.build/debug/pbm --version
 .build/debug/pbm doctor
 ```
 
@@ -28,15 +29,20 @@ install -m 0755 .build/debug/pbm /usr/local/bin/pbm
 
 ```sh
 pbm doctor
+pbm --version
 pbm config init
 pbm see
 pbm see --bundle-id com.google.Chrome
+pbm see --bundle-id com.google.Chrome --window-title Inbox --max-children 50 --timeout 5
 pbm see --app-id com.google.Chrome
 pbm see --scope allApps --max-elements 2000
 pbm image --mode screen --path /tmp/pbm-screen.png
+pbm click --target B1
+pbm click --target-text "Send"
 pbm window list
 pbm app list
 pbm clipboard get
+pbm clipboard get --type public.png --output /tmp/clipboard.png
 pbm snapshot list
 pbm mcp
 ```

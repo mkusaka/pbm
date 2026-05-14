@@ -11,6 +11,17 @@ The macOS v1 implementation is deterministic and public-API-only. It does not fa
 - `NSPasteboard`: clipboard get/set/clear.
 - Quartz Window Services: window inventory and canonical `windowId` metadata.
 
+## Deterministic Hardening Ported From Peekaboo Review
+
+- AX snapshots use bounded traversal with max depth, max element count, per-node child caps, visited-element tracking, deadline checks, and bulk attribute reads where `AXUIElementCopyMultipleAttributeValues` is available.
+- AX children include public alternate child attributes such as visible children, web area children, navigation children, layout/group contents, rows, columns, tabs, `AXWindows`, and the focused element.
+- Target resolution prefers explicit IDs and exact matches before fuzzy matches, and returns structured `target_ambiguous`, `target_not_found`, `stale_snapshot`, or `invalid_argument.conflicting_target` errors.
+- Screen Recording status combines CoreGraphics preflight with a ScreenCaptureKit shareable-content probe for CLI reliability.
+- Window inventory records renderability metadata and default window selection scores usable layer-0 visible windows above utility entries.
+- Input move/drag paths are deterministic linear paths; no randomized humanization or agent planning is used.
+- Clipboard operations support typed NSPasteboard data, Base64 export, file import/export, and size guards.
+- Capture output paths expand directory-like paths, add required extensions, and report scale/coordinate metadata.
+
 ## Structured Capability Errors
 
 These are known honest limits in v1:
