@@ -23,6 +23,17 @@ The executable is generated at:
 .build/debug/pbm
 ```
 
+## Homebrew
+
+```sh
+brew tap mkusaka/tap
+brew install mkusaka/tap/pbm
+pbm --version
+pbm doctor
+```
+
+Release and bottle details are in [Homebrew](homebrew.md).
+
 ## Permissions
 
 Grant permissions to the executable you run, or to a future signed Bridge app.

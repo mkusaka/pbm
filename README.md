@@ -25,6 +25,15 @@ Install the development binary wherever you want the public command name:
 install -m 0755 .build/debug/pbm /usr/local/bin/pbm
 ```
 
+## Install
+
+```sh
+brew tap mkusaka/tap
+brew install mkusaka/tap/pbm
+pbm --version
+pbm doctor
+```
+
 ## Examples
 
 ```sh
@@ -50,6 +59,7 @@ pbm mcp
 ## Documentation
 
 - [macOS install, permissions, and validation](docs/macos.md)
+- [Homebrew install and release](docs/homebrew.md)
 - [Command reference](docs/commands.md)
 - [MCP setup and tools](docs/mcp.md)
 - [Agent skill install](docs/skills.md)
