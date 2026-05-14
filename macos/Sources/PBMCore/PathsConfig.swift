@@ -88,6 +88,12 @@ public struct PBMConfig {
                 "maxAgeSeconds": 300,
                 "maxElementCount": 500,
                 "maxDepth": 8,
+                "maxChildrenPerNode": 50,
+                "timeoutSeconds": 8.0,
+                "includeAlternativeChildren": true,
+                "includeApplicationWindows": true,
+                "includeFocusedElement": true,
+                "webFocusFallback": false,
                 "scope": "frontmost",
             ],
             "daemon": [

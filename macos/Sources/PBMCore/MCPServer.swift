@@ -37,7 +37,7 @@ public final class PBMMCPServer {
                 "protocolVersion": "2025-06-18",
                 "serverInfo": [
                     "name": "pbm",
-                    "version": "0.1.0",
+                    "version": pbmVersion,
                 ],
                 "capabilities": [
                     "tools": [:],
@@ -101,6 +101,26 @@ public final class PBMMCPServer {
             properties["to-x"] = ["type": "number"]
             properties["to-y"] = ["type": "number"]
             properties["button"] = ["type": "string", "enum": ["left", "right"]]
+            addTargetSelectorProperties(to: &properties)
+        }
+        if spec.name.hasPrefix("semantic.") {
+            properties["value"] = ["type": "string"]
+            properties["action"] = ["type": "string"]
+            properties["focused"] = ["type": "boolean"]
+            addTargetSelectorProperties(to: &properties)
+        }
+        if spec.name.hasPrefix("window.") {
+            properties["window-id"] = ["type": "integer"]
+            properties["windowId"] = ["type": "integer"]
+            properties["handle"] = ["type": "integer"]
+            properties["fullscreen"] = ["type": "boolean"]
+        }
+        if spec.name.hasPrefix("snapshot.") {
+            properties["target"] = ["type": "string"]
+            properties["element"] = ["type": "string"]
+            properties["window"] = ["type": "string"]
+            properties["max-age"] = ["type": "number"]
+            properties["maxAge"] = ["type": "number"]
         }
         if spec.name.hasPrefix("observe.") {
             properties["display-id"] = ["type": "integer"]
@@ -114,6 +134,18 @@ public final class PBMMCPServer {
             properties["maxDepth"] = ["type": "integer"]
             properties["max-elements"] = ["type": "integer"]
             properties["maxElementCount"] = ["type": "integer"]
+            properties["max-children"] = ["type": "integer"]
+            properties["maxChildren"] = ["type": "integer"]
+            properties["timeout"] = ["type": "number"]
+            properties["timeout-seconds"] = ["type": "number"]
+            properties["window-title"] = ["type": "string"]
+            properties["windowTitle"] = ["type": "string"]
+            properties["window-index"] = ["type": "integer"]
+            properties["windowIndex"] = ["type": "integer"]
+            properties["alternative-children"] = ["type": "boolean"]
+            properties["application-windows"] = ["type": "boolean"]
+            properties["focused-element"] = ["type": "boolean"]
+            properties["web-focus-fallback"] = ["type": "boolean"]
             properties["fps"] = ["type": "integer"]
             properties["cursor"] = ["type": "boolean"]
         }
@@ -125,11 +157,37 @@ public final class PBMMCPServer {
             properties["value"] = ["type": ["string", "number", "boolean"]]
             properties["force"] = ["type": "boolean"]
         }
+        if spec.name.hasPrefix("clipboard.") {
+            properties["type"] = ["type": "string"]
+            properties["uti"] = ["type": "string"]
+            properties["prefer"] = ["type": "string"]
+            properties["output"] = ["type": "string"]
+            properties["output-path"] = ["type": "string"]
+            properties["file"] = ["type": "string"]
+            properties["file-path"] = ["type": "string"]
+            properties["data-base64"] = ["type": "string"]
+            properties["base64"] = ["type": "boolean"]
+            properties["allow-large"] = ["type": "boolean"]
+            properties["max-bytes"] = ["type": "integer"]
+        }
         return [
             "type": "object",
             "additionalProperties": false,
             "properties": properties,
         ]
+    }
+
+    private func addTargetSelectorProperties(to properties: inout [String: Any]) {
+        properties["target"] = ["type": "string"]
+        properties["target-text"] = ["type": "string"]
+        properties["target-title"] = ["type": "string"]
+        properties["automation-id"] = ["type": "string"]
+        properties["automationId"] = ["type": "string"]
+        properties["role"] = ["type": "string"]
+        properties["index"] = ["type": "integer"]
+        properties["window-id"] = ["type": "integer"]
+        properties["windowId"] = ["type": "integer"]
+        properties["handle"] = ["type": "integer"]
     }
 
     private func jsonRPC(id: Any, result: Any) -> [String: Any] {

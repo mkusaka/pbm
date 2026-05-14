@@ -11,8 +11,12 @@ enum PBMObserve {
             return permissionDeniedScreenRecording()
         }
         let mode = args.string("mode") ?? "screen"
-        let path = args.string("path") ?? PBMPaths.captures.appendingPathComponent("capture-\(Int(Date().timeIntervalSince1970)).png").path
-        let url = URL(fileURLWithPath: path)
+        let url = PBMOutputPath.resolve(
+            rawPath: args.string("path"),
+            defaultDirectory: PBMPaths.captures,
+            defaultFilename: "capture-\(Int(Date().timeIntervalSince1970))",
+            requiredExtension: "png",
+        )
         do {
             let image: CGImage?
             var metadata: [String: Any] = [
@@ -58,6 +62,11 @@ enum PBMObserve {
                 image = capture.image
                 strategy = capture.strategy
                 metadata["windowId"] = windowID
+                metadata["window"] = [
+                    "windowId": windowID,
+                    "bounds": PBMNative.rectDict(window.frame),
+                    "scale": filter.pointPixelScale,
+                ]
             default:
                 return .failure(code: "invalid_argument.capture_mode", message: "Unsupported image mode.", details: ["mode": mode], exitCode: 2)
             }
@@ -169,7 +178,12 @@ enum PBMObserve {
         guard let session = session(kind: "live", id: id) else {
             return .failure(code: "target_not_found", message: "Live capture session was not found.", details: ["id": id ?? "latest"])
         }
-        let path = args.string("path") ?? PBMPaths.captures.appendingPathComponent("\(session["id"] ?? "live")-\(Int(Date().timeIntervalSince1970)).png").path
+        let path = PBMOutputPath.resolve(
+            rawPath: args.string("path"),
+            defaultDirectory: PBMPaths.captures,
+            defaultFilename: "\(session["id"] ?? "live")-\(Int(Date().timeIntervalSince1970))",
+            requiredExtension: "png",
+        ).path
         let imageArgs = args.merged(with: ["path": path, "mode": session["mode"] as? String ?? "screen"])
         let result = image(args: imageArgs)
         if result.envelope["ok"] as? Bool == true, var data = result.envelope["data"] as? [String: Any] {
@@ -353,8 +367,13 @@ final class PBMRecordingDelegate: NSObject, SCRecordingOutputDelegate {
 @available(macOS 15.0, *)
 enum PBMVideoRecorder {
     static func recordDuration(args: PBMArguments, duration: Double) -> PBMExecutionResult {
-        let outputPath = args.string("path") ?? PBMPaths.captures.appendingPathComponent("capture-\(Int(Date().timeIntervalSince1970)).mp4").path
-        let outputURL = URL(fileURLWithPath: outputPath)
+        let outputURL = PBMOutputPath.resolve(
+            rawPath: args.string("path"),
+            defaultDirectory: PBMPaths.captures,
+            defaultFilename: "capture-\(Int(Date().timeIntervalSince1970))",
+            requiredExtension: "mp4",
+        )
+        let outputPath = outputURL.path
         do {
             try PBMPaths.ensureBaseDirectories()
             try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)

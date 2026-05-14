@@ -1,6 +1,7 @@
 import Foundation
 
 public let pbmStableSchemaVersion = "pbm.stable.v1"
+public let pbmVersion = "0.0.1"
 
 public struct PBMExecutionResult {
     public let envelope: [String: Any]

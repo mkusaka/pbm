@@ -1,31 +1,157 @@
 import AppKit
 import ApplicationServices
 import Foundation
+import UniformTypeIdentifiers
 
 enum PBMClipboard {
-    static func get() -> PBMExecutionResult {
+    private static let defaultMaxBytes = 10 * 1024 * 1024
+
+    static func get(args: PBMArguments) -> PBMExecutionResult {
         let pasteboard = NSPasteboard.general
+        let types = pasteboard.types ?? []
         let text = pasteboard.string(forType: .string)
-        return .success([
-            "types": pasteboard.types?.map(\.rawValue) ?? [],
+        let requestedType = args.string("type") ?? args.string("uti") ?? args.string("prefer")
+        let selectedType = selectType(requestedType, from: types)
+        if let requestedType, selectedType == nil {
+            return .failure(
+                code: "target_not_found",
+                message: "Clipboard type was not found.",
+                details: ["type": requestedType, "availableTypes": types.map(\.rawValue)],
+            )
+        }
+
+        var data: [String: Any] = [
+            "types": types.map(\.rawValue),
             "text": text as Any? ?? NSNull(),
             "hasText": text != nil,
-        ])
+            "selectedType": selectedType?.rawValue as Any? ?? NSNull(),
+        ]
+
+        if let selectedType, let payload = pasteboard.data(forType: selectedType) {
+            let maxBytes = args.int("max-bytes") ?? defaultMaxBytes
+            data["bytes"] = payload.count
+            if args.bool("base64") {
+                guard payload.count <= maxBytes || args.bool("allow-large") else {
+                    return .failure(
+                        code: "invalid_argument.clipboard_data_too_large",
+                        message: "Clipboard data exceeds --max-bytes. Pass --allow-large to include it.",
+                        details: ["bytes": payload.count, "maxBytes": maxBytes, "type": selectedType.rawValue],
+                        exitCode: 2,
+                    )
+                }
+                data["dataBase64"] = payload.base64EncodedString()
+            }
+            if let outputPath = args.string("output") ?? args.string("output-path") {
+                do {
+                    let output = PBMOutputPath.resolve(
+                        rawPath: outputPath,
+                        defaultDirectory: PBMPaths.captures,
+                        defaultFilename: "clipboard-\(Int(Date().timeIntervalSince1970))",
+                        requiredExtension: preferredExtension(for: selectedType.rawValue),
+                    )
+                    try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try payload.write(to: output, options: .atomic)
+                    data["outputPath"] = output.path
+                } catch {
+                    return .failure(code: "internal.clipboard_write", message: error.localizedDescription)
+                }
+            }
+        } else if let text, let outputPath = args.string("output") ?? args.string("output-path") {
+            do {
+                let output = PBMOutputPath.resolve(
+                    rawPath: outputPath,
+                    defaultDirectory: PBMPaths.captures,
+                    defaultFilename: "clipboard-\(Int(Date().timeIntervalSince1970))",
+                    requiredExtension: "txt",
+                )
+                try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try Data(text.utf8).write(to: output, options: .atomic)
+                data["outputPath"] = output.path
+            } catch {
+                return .failure(code: "internal.clipboard_write", message: error.localizedDescription)
+            }
+        }
+        return .success(data)
     }
 
     static func set(args: PBMArguments) -> PBMExecutionResult {
+        if let dataBase64 = args.string("data-base64") ?? args.string("base64-data") {
+            guard let payload = Data(base64Encoded: dataBase64) else {
+                return .failure(code: "invalid_argument.data_base64", message: "--data-base64 is not valid Base64.", exitCode: 2)
+            }
+            return setData(payload, type: args.string("type") ?? args.string("uti") ?? "public.data", args: args)
+        }
+
+        if let filePath = args.string("file-path") ?? args.string("file"), args.string("text") == nil {
+            do {
+                let url = URL(fileURLWithPath: NSString(string: filePath).expandingTildeInPath)
+                let payload = try Data(contentsOf: url)
+                let type = args.string("type") ?? args.string("uti") ?? preferredUTI(for: url)
+                return setData(payload, type: type, args: args, sourcePath: url.path)
+            } catch {
+                return .failure(code: "internal.clipboard_read", message: error.localizedDescription, details: ["path": filePath])
+            }
+        }
+
         guard let text = args.string("text") ?? args.positionals.first else {
-            return .failure(code: "invalid_argument.missing_text", message: "--text is required.", exitCode: 2)
+            return .failure(code: "invalid_argument.missing_clipboard_content", message: "--text, --file-path, or --data-base64 is required.", exitCode: 2)
         }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        return .success(["types": ["public.utf8-plain-text"], "characters": text.count])
+        return .success(["types": ["public.utf8-plain-text"], "characters": text.count, "strategy": "NSPasteboard.setString"])
     }
 
     static func clear() -> PBMExecutionResult {
         NSPasteboard.general.clearContents()
         return .success(["cleared": true])
+    }
+
+    private static func setData(_ payload: Data, type: String, args: PBMArguments, sourcePath: String? = nil) -> PBMExecutionResult {
+        let maxBytes = args.int("max-bytes") ?? defaultMaxBytes
+        guard payload.count <= maxBytes || args.bool("allow-large") else {
+            return .failure(
+                code: "invalid_argument.clipboard_data_too_large",
+                message: "Clipboard data exceeds --max-bytes. Pass --allow-large to set it.",
+                details: ["bytes": payload.count, "maxBytes": maxBytes, "type": type],
+                exitCode: 2,
+            )
+        }
+        let pasteboardType = NSPasteboard.PasteboardType(type)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        let ok = pasteboard.setData(payload, forType: pasteboardType)
+        var data: [String: Any] = [
+            "set": ok,
+            "types": [type],
+            "bytes": payload.count,
+            "strategy": "NSPasteboard.setData",
+        ]
+        if let sourcePath {
+            data["sourcePath"] = sourcePath
+        }
+        return .success(data)
+    }
+
+    private static func selectType(_ requestedType: String?, from types: [NSPasteboard.PasteboardType]) -> NSPasteboard.PasteboardType? {
+        guard let requestedType, !requestedType.isEmpty else {
+            return types.contains(.string) ? .string : types.first
+        }
+        if let exact = types.first(where: { $0.rawValue == requestedType }) {
+            return exact
+        }
+        return types.first { $0.rawValue.localizedCaseInsensitiveContains(requestedType) }
+    }
+
+    private static func preferredUTI(for url: URL) -> String {
+        if let type = UTType(filenameExtension: url.pathExtension) {
+            return type.identifier
+        }
+        return "public.data"
+    }
+
+    private static func preferredExtension(for type: String) -> String {
+        UTType(type)?.preferredFilenameExtension ?? "bin"
     }
 }
 
@@ -271,12 +397,14 @@ enum PBMWindow {
             }
             return (matches.first, nil)
         }
-        return (windows.first, nil)
+        return (PBMWindowRenderability.bestWindow(from: windows), nil)
     }
 
     private static func axWindow(args _: PBMArguments, target: [String: Any]) -> AXUIElement? {
         guard let pid = target["ownerPID"] as? Int else { return nil }
         let app = AXUIElementCreateApplication(pid_t(pid))
+        _ = AXUIElementSetMessagingTimeout(app, 2.0)
+        defer { _ = AXUIElementSetMessagingTimeout(app, 0) }
         var windowsValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windowsValue) == .success,
               let windows = windowsValue as? [AXUIElement]

@@ -127,9 +127,14 @@ enum PBMDiagnostics {
         let config = PBMConfig.load()
         let validation = config.validate()
         let swiftVersion = ProcessInfo.processInfo.operatingSystemVersionString
+        let screenRecordingPreflight = PBMNative.screenRecordingPreflightAllowed()
+        let screenRecordingProbe = PBMNative.screenRecordingContentProbeAllowed()
+        let screenRecordingAllowed = screenRecordingPreflight || screenRecordingProbe
+        let accessibilityAllowed = PBMNative.accessibilityAllowed()
         return .success([
             "platform": "macos",
             "os": swiftVersion,
+            "version": pbmVersion,
             "schemaVersion": pbmStableSchemaVersion,
             "paths": [
                 "home": PBMPaths.home.path,
@@ -139,14 +144,17 @@ enum PBMDiagnostics {
                 "daemonSocket": PBMPaths.daemonSocket.path,
             ],
             "permissions": [
-                "accessibility": PBMNative.accessibilityAllowed(),
-                "screenRecording": PBMNative.screenRecordingAllowed(),
+                "accessibility": accessibilityAllowed,
+                "screenRecording": screenRecordingAllowed,
+                "screenRecordingPreflight": screenRecordingPreflight,
+                "screenRecordingContentProbe": screenRecordingProbe,
                 "postEvent": PBMNative.postEventAllowed(),
+                "appleEventsSystemEvents": PBMNative.appleEventsAllowed(),
             ],
             "config": validation,
             "capabilities": [
-                "captureImage": PBMNative.screenRecordingAllowed(),
-                "accessibilityActions": PBMNative.accessibilityAllowed(),
+                "captureImage": screenRecordingAllowed,
+                "accessibilityActions": accessibilityAllowed,
                 "dockPinnedItems": "capability_unavailable.dock_pinned_items_public_api",
                 "spacesEnumeration": "capability_unavailable.space_list",
                 "bridge": "capability_unavailable.bridge_bundle",

@@ -8,6 +8,12 @@ public struct PBMCLI {
     }
 
     public func run(arguments: [String]) -> PBMExecutionResult {
+        if arguments.first == "--version" || arguments.first == "-V" || arguments.first == "version" {
+            return .success([
+                "name": "pbm",
+                "version": pbmVersion,
+            ])
+        }
         if arguments.first == "__daemon-run" {
             let exitCode = PBMDaemon.runForegroundServer()
             return PBMExecutionResult(envelope: [:], exitCode: exitCode, output: nil)
@@ -103,14 +109,14 @@ public struct PBMRuntime {
             if args.bool("focused") {
                 return PBMAX.setFocusedValue(args.string("value") ?? args.string("text") ?? "")
             }
-            if let text = args.string("value") ?? args.string("text") {
+            if let text = args.string("value") {
                 let click = PBMInput.click(args: args)
                 if click.envelope["ok"] as? Bool == true {
                     return PBMInput.type(args: PBMArguments(options: ["text": text], positionals: []))
                 }
                 return click
             }
-            return .failure(code: "invalid_argument.missing_value", message: "--value or --text is required.", exitCode: 2)
+            return .failure(code: "invalid_argument.missing_value", message: "--value is required for targeted set-value. Use --focused --text only for the focused element.", exitCode: 2)
         case "semantic.perform-action":
             if args.bool("focused") {
                 return PBMAX.performFocusedAction(args.string("action") ?? "AXPress")
@@ -178,7 +184,7 @@ public struct PBMRuntime {
                 details: ["tool": spec.name, "publicAPI": "AXUIElement best-effort only"],
             )
         case "clipboard.get":
-            return PBMClipboard.get()
+            return PBMClipboard.get(args: args)
         case "clipboard.set":
             return PBMClipboard.set(args: args)
         case "clipboard.clear":
@@ -244,6 +250,33 @@ public struct PBMRuntime {
         }
         if let maxElementCount = args.int("max-elements") ?? args.int("maxElementCount") {
             config.set(value: maxElementCount, at: "snapshot.maxElementCount")
+        }
+        if let maxChildren = args.int("max-children") ?? args.int("maxChildren") ?? args.int("max-children-per-node") {
+            config.set(value: maxChildren, at: "snapshot.maxChildrenPerNode")
+        }
+        if let timeout = args.double("timeout") ?? args.double("timeout-seconds") ?? args.double("timeoutSeconds") {
+            config.set(value: timeout, at: "snapshot.timeoutSeconds")
+        }
+        if let windowID = args.int("window-id") ?? args.int("windowId") ?? args.int("handle") {
+            config.set(value: windowID, at: "snapshot.windowId")
+        }
+        if let windowTitle = args.string("window-title") ?? args.string("windowTitle") ?? args.string("title") {
+            config.set(value: windowTitle, at: "snapshot.windowTitle")
+        }
+        if let windowIndex = args.int("window-index") ?? args.int("windowIndex") {
+            config.set(value: windowIndex, at: "snapshot.windowIndex")
+        }
+        if args.options.keys.contains("alternative-children") {
+            config.set(value: args.bool("alternative-children"), at: "snapshot.includeAlternativeChildren")
+        }
+        if args.options.keys.contains("application-windows") {
+            config.set(value: args.bool("application-windows"), at: "snapshot.includeApplicationWindows")
+        }
+        if args.options.keys.contains("focused-element") {
+            config.set(value: args.bool("focused-element"), at: "snapshot.includeFocusedElement")
+        }
+        if args.bool("web-focus-fallback") {
+            config.set(value: true, at: "snapshot.webFocusFallback")
         }
         return config
     }

@@ -3,6 +3,7 @@ import ApplicationServices
 import CoreGraphics
 import Foundation
 import ImageIO
+@preconcurrency import ScreenCaptureKit
 import UniformTypeIdentifiers
 
 enum PBMNative {
@@ -28,9 +29,29 @@ enum PBMNative {
 
     static func screenRecordingAllowed() -> Bool {
         if #available(macOS 10.15, *) {
+            if screenRecordingPreflightAllowed() {
+                return true
+            }
+            guard !isRunningUnderTests else {
+                return false
+            }
+            return screenRecordingContentProbeAllowed()
+        }
+        return true
+    }
+
+    static func screenRecordingPreflightAllowed() -> Bool {
+        if #available(macOS 10.15, *) {
             return CGPreflightScreenCaptureAccess()
         }
         return true
+    }
+
+    static func screenRecordingContentProbeAllowed() -> Bool {
+        guard !isRunningUnderTests else {
+            return false
+        }
+        return screenCaptureContentProbeAllowed()
     }
 
     static func accessibilityAllowed() -> Bool {
@@ -39,6 +60,25 @@ enum PBMNative {
 
     static func postEventAllowed() -> Bool {
         CGPreflightPostEventAccess()
+    }
+
+    static func requestAccessibilityIfNeeded(prompt: Bool) -> Bool {
+        guard !isRunningUnderTests else {
+            return accessibilityAllowed()
+        }
+        let options = ["AXTrustedCheckOptionPrompt": prompt]
+        return AXIsProcessTrustedWithOptions(options as CFDictionary)
+    }
+
+    static func appleEventsAllowed(targetBundleIdentifier: String = "com.apple.systemevents") -> Bool {
+        guard !isRunningUnderTests else { return false }
+        guard var address = makeAppleEventTarget(bundleIdentifier: targetBundleIdentifier) else {
+            return false
+        }
+        defer { AEDisposeDesc(&address) }
+        let eventClass = AEEventClass(0x636F_7265)
+        let eventID = AEEventID(0x6765_7464)
+        return AEDeterminePermissionToAutomateTarget(&address, eventClass, eventID, false) == noErr
     }
 
     static func displays() -> [[String: Any]] {
@@ -82,6 +122,15 @@ enum PBMNative {
             let ownerPID = item[kCGWindowOwnerPID as String] as? Int ?? 0
             let ownerName = item[kCGWindowOwnerName as String] as? String ?? ""
             let title = item[kCGWindowName as String] as? String ?? ""
+            let layer = item[kCGWindowLayer as String] as? Int ?? 0
+            let alpha = item[kCGWindowAlpha as String] as? Double ?? 1.0
+            let isOnScreen = item[kCGWindowIsOnscreen as String] as? Bool ?? onScreenOnly
+            let renderabilityReason = PBMWindowRenderability.disqualificationReason(
+                bounds: rect,
+                layer: layer,
+                alpha: alpha,
+                isOnScreen: isOnScreen,
+            )
             return [
                 "id": "W\(index)",
                 "windowId": windowNumber,
@@ -90,9 +139,11 @@ enum PBMNative {
                 "app": ownerName,
                 "title": title,
                 "bounds": rectDict(rect),
-                "layer": item[kCGWindowLayer as String] as? Int ?? 0,
-                "alpha": item[kCGWindowAlpha as String] as? Double ?? 1.0,
-                "onScreen": item[kCGWindowIsOnscreen as String] as? Bool ?? onScreenOnly,
+                "layer": layer,
+                "alpha": alpha,
+                "onScreen": isOnScreen,
+                "isRenderable": renderabilityReason == nil,
+                "renderabilityReason": renderabilityReason as Any? ?? NSNull(),
             ]
         }
     }
@@ -121,6 +172,137 @@ enum PBMNative {
             result["reason"] = reason
         }
         return result
+    }
+
+    private static var isRunningUnderTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+            ProcessInfo.processInfo.arguments.contains("--test-mode") ||
+            NSClassFromString("XCTest") != nil
+    }
+
+    private static func screenCaptureContentProbeAllowed() -> Bool {
+        let semaphore = DispatchSemaphore(value: 0)
+        final class Box: @unchecked Sendable {
+            var ok = false
+        }
+        let box = Box()
+        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { content, _ in
+            box.ok = content != nil
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 2)
+        return box.ok
+    }
+
+    private static func makeAppleEventTarget(bundleIdentifier: String) -> AEDesc? {
+        guard let data = bundleIdentifier.data(using: .utf8), !data.isEmpty else {
+            return nil
+        }
+        var address = AEDesc()
+        let status = data.withUnsafeBytes { buffer -> OSStatus in
+            guard let baseAddress = buffer.baseAddress else {
+                return OSStatus(paramErr)
+            }
+            return OSStatus(AECreateDesc(DescType(typeApplicationBundleID), baseAddress, buffer.count, &address))
+        }
+        return status == noErr ? address : nil
+    }
+}
+
+enum PBMWindowRenderability {
+    static func disqualificationReason(
+        bounds: CGRect,
+        layer: Int,
+        alpha: Double,
+        isOnScreen: Bool,
+        minWidth: CGFloat = 60,
+        minHeight: CGFloat = 60,
+    ) -> String? {
+        if layer != 0 {
+            return "layer != 0"
+        }
+        if alpha <= 0 {
+            return "alpha too low"
+        }
+        if !isOnScreen {
+            return "window off-screen"
+        }
+        if bounds.width < minWidth || bounds.height < minHeight {
+            return "window too small"
+        }
+        return nil
+    }
+
+    static func bestWindow(from windows: [[String: Any]]) -> [String: Any]? {
+        windows.max { lhs, rhs in
+            score(lhs) < score(rhs)
+        }
+    }
+
+    private static func score(_ window: [String: Any]) -> Double {
+        var score = 0.0
+        if window["isRenderable"] as? Bool == true {
+            score += 2000
+        }
+        if (window["layer"] as? Int ?? 0) == 0 {
+            score += 500
+        }
+        let title = window["title"] as? String ?? ""
+        score += title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? -500 : 1500
+        if let bounds = window["bounds"] as? [String: Any] {
+            let area = (bounds.double("width") ?? 0) * (bounds.double("height") ?? 0)
+            score += min(area / 150.0, 4000)
+        }
+        return score
+    }
+}
+
+enum PBMOutputPath {
+    static func resolve(
+        rawPath: String?,
+        defaultDirectory: URL,
+        defaultFilename: String,
+        requiredExtension: String,
+    ) -> URL {
+        var url: URL
+        if let rawPath, !rawPath.isEmpty {
+            let expanded = expandTilde(rawPath)
+            url = URL(fileURLWithPath: expanded)
+            if isDirectoryLike(path: rawPath, url: url) {
+                url.appendPathComponent(defaultFilename)
+            }
+        } else {
+            url = defaultDirectory.appendingPathComponent(defaultFilename)
+        }
+
+        let wanted = requiredExtension.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased()
+        if url.pathExtension.lowercased() != wanted {
+            url = url.deletingPathExtension().appendingPathExtension(wanted)
+        }
+        return url
+    }
+
+    private static func expandTilde(_ path: String) -> String {
+        if path == "~" {
+            return FileManager.default.homeDirectoryForCurrentUser.path
+        }
+        if path.hasPrefix("~/") {
+            return FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(String(path.dropFirst(2)))
+                .path
+        }
+        return path
+    }
+
+    private static func isDirectoryLike(path: String, url: URL) -> Bool {
+        if path.hasSuffix("/") {
+            return true
+        }
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+            return isDirectory.boolValue
+        }
+        return false
     }
 }
 
