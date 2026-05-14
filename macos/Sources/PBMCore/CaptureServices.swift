@@ -323,7 +323,7 @@ private final class PBMFrameCaptureBox: @unchecked Sendable {
 }
 
 private final class PBMFrameCaptureOutput: NSObject, SCStreamOutput {
-    private static let context = CIContext()
+    private let context = CIContext()
     private let box: PBMFrameCaptureBox
 
     init(box: PBMFrameCaptureBox) {
@@ -338,7 +338,7 @@ private final class PBMFrameCaptureOutput: NSObject, SCStreamOutput {
         guard width > 0, height > 0 else { return }
         let image = CIImage(cvPixelBuffer: pixelBuffer)
         let rect = CGRect(x: 0, y: 0, width: width, height: height)
-        if let cgImage = Self.context.createCGImage(image, from: rect) {
+        if let cgImage = context.createCGImage(image, from: rect) {
             box.complete(image: cgImage)
         }
     }
