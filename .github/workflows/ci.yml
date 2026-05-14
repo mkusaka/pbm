@@ -26,11 +26,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Verify Swift 6.2 toolchain
+      - name: Verify Swift package tools version
         run: |
           xcodebuild -version
           xcrun swift --version
-          xcrun swift --version | grep -q 'Apple Swift version 6\.2\.'
+          test "$(swift package tools-version)" = "6.2.0"
 
       - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
@@ -74,18 +74,18 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Verify Swift 6.2 toolchain
+      - name: Verify Swift package tools version
         run: |
           xcodebuild -version
           xcrun swift --version
-          xcrun swift --version | grep -q 'Apple Swift version 6\.2\.'
+          test "$(swift package tools-version)" = "6.2.0"
 
       - name: Build
         run: swift build
 
       - name: Unit and integration tests
         run: |
-          PBW_BIN="$(swift build --show-bin-path)/pbw" swift test
+          PBM_BIN="$(swift build --show-bin-path)/pbm" swift test
 
       - name: CLI E2E smoke test
         run: scripts/e2e-smoke.sh

@@ -2,8 +2,8 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-enum PBWInput {
-    static func click(args: PBWArguments) -> PBWExecutionResult {
+enum PBMInput {
+    static func click(args: PBMArguments) -> PBMExecutionResult {
         if let denied = permissionDeniedPostEvent() { return denied }
         guard let point = targetPoint(args: args) else {
             return .failure(code: "invalid_argument.missing_target", message: "Provide --x and --y or a resolvable target.", exitCode: 2)
@@ -14,22 +14,22 @@ enum PBWInput {
         postMouse(type: downType, point: point, button: button)
         usleep(30000)
         postMouse(type: upType, point: point, button: button)
-        return .success(["point": PBWNative.pointDict(point), "button": args.string("button") ?? "left", "strategy": "CGEvent"])
+        return .success(["point": PBMNative.pointDict(point), "button": args.string("button") ?? "left", "strategy": "CGEvent"])
     }
 
-    static func move(args: PBWArguments) -> PBWExecutionResult {
+    static func move(args: PBMArguments) -> PBMExecutionResult {
         if let denied = permissionDeniedPostEvent() { return denied }
-        guard let point = PBWNative.parsePoint(args) else {
+        guard let point = PBMNative.parsePoint(args) else {
             return .failure(code: "invalid_argument.missing_coordinates", message: "--x and --y are required.", exitCode: 2)
         }
         postMouse(type: .mouseMoved, point: point, button: .left)
-        return .success(["point": PBWNative.pointDict(point), "strategy": "CGEvent"])
+        return .success(["point": PBMNative.pointDict(point), "strategy": "CGEvent"])
     }
 
-    static func drag(args: PBWArguments) -> PBWExecutionResult {
+    static func drag(args: PBMArguments) -> PBMExecutionResult {
         if let denied = permissionDeniedPostEvent() { return denied }
-        guard let from = PBWNative.parsePoint(args, xKey: "from-x", yKey: "from-y"),
-              let to = PBWNative.parsePoint(args, xKey: "to-x", yKey: "to-y")
+        guard let from = PBMNative.parsePoint(args, xKey: "from-x", yKey: "from-y"),
+              let to = PBMNative.parsePoint(args, xKey: "to-x", yKey: "to-y")
         else {
             return .failure(code: "invalid_argument.missing_coordinates", message: "--from-x --from-y --to-x --to-y are required.", exitCode: 2)
         }
@@ -38,17 +38,17 @@ enum PBWInput {
         postMouse(type: .leftMouseDragged, point: to, button: .left)
         usleep(40000)
         postMouse(type: .leftMouseUp, point: to, button: .left)
-        return .success(["from": PBWNative.pointDict(from), "to": PBWNative.pointDict(to), "strategy": "CGEvent"])
+        return .success(["from": PBMNative.pointDict(from), "to": PBMNative.pointDict(to), "strategy": "CGEvent"])
     }
 
-    static func scroll(args: PBWArguments) -> PBWExecutionResult {
+    static func scroll(args: PBMArguments) -> PBMExecutionResult {
         if let denied = permissionDeniedPostEvent() { return denied }
         let dx = Int32(args.int("dx") ?? 0)
         let dy = Int32(args.int("dy") ?? args.int("delta") ?? 0)
         guard dx != 0 || dy != 0 else {
             return .failure(code: "invalid_argument.missing_delta", message: "--dy or --dx is required.", exitCode: 2)
         }
-        if let point = PBWNative.parsePoint(args) {
+        if let point = PBMNative.parsePoint(args) {
             postMouse(type: .mouseMoved, point: point, button: .left)
         }
         let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: dy, wheel2: dx, wheel3: 0)
@@ -56,7 +56,7 @@ enum PBWInput {
         return .success(["dx": Int(dx), "dy": Int(dy), "strategy": "CGEvent"])
     }
 
-    static func type(args: PBWArguments) -> PBWExecutionResult {
+    static func type(args: PBMArguments) -> PBMExecutionResult {
         if let denied = permissionDeniedPostEvent() { return denied }
         guard let text = args.string("text") ?? args.positionals.first else {
             return .failure(code: "invalid_argument.missing_text", message: "--text is required.", exitCode: 2)
@@ -73,7 +73,7 @@ enum PBWInput {
         return .success(["characters": text.count, "strategy": "CGEvent"])
     }
 
-    static func press(args: PBWArguments) -> PBWExecutionResult {
+    static func press(args: PBMArguments) -> PBMExecutionResult {
         if let denied = permissionDeniedPostEvent() { return denied }
         guard let key = args.string("key") ?? args.positionals.first else {
             return .failure(code: "invalid_argument.missing_key", message: "--key is required.", exitCode: 2)
@@ -85,7 +85,7 @@ enum PBWInput {
         return .success(["key": key, "keyCode": Int(code), "strategy": "CGEvent"])
     }
 
-    static func hotkey(args: PBWArguments) -> PBWExecutionResult {
+    static func hotkey(args: PBMArguments) -> PBMExecutionResult {
         if let denied = permissionDeniedPostEvent() { return denied }
         let keys = (args.string("keys") ?? args.positionals.first ?? "")
             .split(separator: "+")
@@ -103,22 +103,22 @@ enum PBWInput {
         return .success(["keys": keys.joined(separator: "+"), "keyCode": Int(code), "strategy": "CGEvent"])
     }
 
-    static func paste() -> PBWExecutionResult {
+    static func paste() -> PBMExecutionResult {
         if let denied = permissionDeniedPostEvent() { return denied }
         postKey(code: 0x09, modifiers: .maskCommand)
         return .success(["keys": "cmd+v", "strategy": "CGEvent"])
     }
 
-    private static func permissionDeniedPostEvent() -> PBWExecutionResult? {
-        guard !PBWNative.postEventAllowed() else { return nil }
+    private static func permissionDeniedPostEvent() -> PBMExecutionResult? {
+        guard !PBMNative.postEventAllowed() else { return nil }
         return .failure(
             code: "permission_denied.input_monitoring",
             message: "Input event posting permission is required for synthetic input.",
             details: [
                 "service": "Input Monitoring",
-                "howToFix": "Grant input/event posting permission to the pbw executable or Bridge app in System Settings.",
+                "howToFix": "Grant input/event posting permission to the pbm executable or Bridge app in System Settings.",
             ],
-            retryHint: "Run `pbw diagnostics doctor` after granting permission.",
+            retryHint: "Run `pbm diagnostics doctor` after granting permission.",
         )
     }
 
@@ -136,12 +136,12 @@ enum PBWInput {
         up?.post(tap: .cghidEventTap)
     }
 
-    private static func targetPoint(args: PBWArguments) -> CGPoint? {
-        if let point = PBWNative.parsePoint(args) {
+    private static func targetPoint(args: PBMArguments) -> CGPoint? {
+        if let point = PBMNative.parsePoint(args) {
             return point
         }
         if let id = args.string("id") ?? args.string("target"),
-           let target = PBWTargetResolver.resolve(id: id, snapshotID: args.string("snapshot"))
+           let target = PBMTargetResolver.resolve(id: id, snapshotID: args.string("snapshot"))
         {
             return target.point
         }
@@ -167,17 +167,17 @@ enum PBWInput {
     }
 }
 
-struct PBWResolvedTarget {
+struct PBMResolvedTarget {
     let id: String
     let point: CGPoint
     let item: [String: Any]
 }
 
-enum PBWTargetResolver {
-    static func resolve(id: String, snapshotID: String?) -> PBWResolvedTarget? {
-        let store = PBWSnapshotStore()
+enum PBMTargetResolver {
+    static func resolve(id: String, snapshotID: String?) -> PBMResolvedTarget? {
+        let store = PBMSnapshotStore()
         guard let url = store.resolveSnapshotURL(id: snapshotID),
-              let snapshot = try? PBWJSON.parseObject(Data(contentsOf: url))
+              let snapshot = try? PBMJSON.parseObject(Data(contentsOf: url))
         else {
             return nil
         }
@@ -188,7 +188,7 @@ enum PBWTargetResolver {
                    let x = bounds.double("x"), let y = bounds.double("y"),
                    let width = bounds.double("width"), let height = bounds.double("height")
                 {
-                    return PBWResolvedTarget(id: id, point: CGPoint(x: x + width / 2, y: y + height / 2), item: item)
+                    return PBMResolvedTarget(id: id, point: CGPoint(x: x + width / 2, y: y + height / 2), item: item)
                 }
             }
         }

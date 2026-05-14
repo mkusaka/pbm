@@ -1,9 +1,9 @@
 import Foundation
 
-public final class PBWMCPServer {
-    private let runtime: PBWRuntime
+public final class PBMMCPServer {
+    private let runtime: PBMRuntime
 
-    public init(runtime: PBWRuntime = PBWRuntime()) {
+    public init(runtime: PBMRuntime = PBMRuntime()) {
         self.runtime = runtime
     }
 
@@ -36,7 +36,7 @@ public final class PBWMCPServer {
             return jsonRPC(id: id, result: [
                 "protocolVersion": "2025-06-18",
                 "serverInfo": [
-                    "name": "pbw",
+                    "name": "pbm",
                     "version": "0.1.0",
                 ],
                 "capabilities": [
@@ -62,7 +62,7 @@ public final class PBWMCPServer {
     }
 
     public func toolList() -> [[String: Any]] {
-        PBWCommandRegistry.commands
+        PBMCommandRegistry.commands
             .filter { $0.name != "help" && $0.name != "mcp" }
             .map { spec in
                 [
@@ -73,7 +73,7 @@ public final class PBWMCPServer {
             }
     }
 
-    private func inputSchema(for spec: PBWCommandSpec) -> [String: Any] {
+    private func inputSchema(for spec: PBMCommandSpec) -> [String: Any] {
         var properties: [String: Any] = [
             "confirm": ["type": "boolean"],
             "mode": ["type": "string", "enum": ["direct", "daemon", "bridge"]],
@@ -105,6 +105,15 @@ public final class PBWMCPServer {
         if spec.name.hasPrefix("observe.") {
             properties["display-id"] = ["type": "integer"]
             properties["window-id"] = ["type": "integer"]
+            properties["scope"] = ["type": "string", "enum": ["frontmost", "allApps"]]
+            properties["app"] = ["type": "string"]
+            properties["app-id"] = ["type": "string"]
+            properties["appId"] = ["type": "string"]
+            properties["bundleId"] = ["type": "string"]
+            properties["max-depth"] = ["type": "integer"]
+            properties["maxDepth"] = ["type": "integer"]
+            properties["max-elements"] = ["type": "integer"]
+            properties["maxElementCount"] = ["type": "integer"]
             properties["fps"] = ["type": "integer"]
             properties["cursor"] = ["type": "boolean"]
         }
@@ -143,7 +152,7 @@ public final class PBWMCPServer {
     }
 
     private func writeMessage(_ object: [String: Any]) {
-        let body = PBWJSON.encode(object)
+        let body = PBMJSON.encode(object)
         let header = Data("Content-Length: \(body.count)\r\n\r\n".utf8)
         FileHandle.standardOutput.write(header)
         FileHandle.standardOutput.write(body)
@@ -171,12 +180,12 @@ public final class PBWMCPServer {
             guard buffer.count >= bodyEnd else { return nil }
             let body = buffer.subdata(in: bodyStart ..< bodyEnd)
             buffer.removeSubrange(buffer.startIndex ..< bodyEnd)
-            return try? PBWJSON.parseObject(body)
+            return try? PBMJSON.parseObject(body)
         }
         if let newline = buffer.firstIndex(of: 0x0A) {
             let line = buffer.subdata(in: buffer.startIndex ..< newline)
             buffer.removeSubrange(buffer.startIndex ... newline)
-            return try? PBWJSON.parseObject(line)
+            return try? PBMJSON.parseObject(line)
         }
         return nil
     }

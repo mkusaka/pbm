@@ -1,8 +1,8 @@
 import Foundation
 
-public let pbwStableSchemaVersion = "pbw.stable.v1"
+public let pbmStableSchemaVersion = "pbm.stable.v1"
 
-public struct PBWExecutionResult {
+public struct PBMExecutionResult {
     public let envelope: [String: Any]
     public let exitCode: Int32
     public let output: Data?
@@ -13,13 +13,13 @@ public struct PBWExecutionResult {
         self.output = output
     }
 
-    public static func success(_ data: Any = [:], exitCode: Int32 = 0) -> PBWExecutionResult {
+    public static func success(_ data: Any = [:], exitCode: Int32 = 0) -> PBMExecutionResult {
         let envelope: [String: Any] = [
-            "schemaVersion": pbwStableSchemaVersion,
+            "schemaVersion": pbmStableSchemaVersion,
             "ok": true,
-            "data": PBWJSON.normalized(data),
+            "data": PBMJSON.normalized(data),
         ]
-        return PBWExecutionResult(envelope: envelope, exitCode: exitCode, output: PBWJSON.encode(envelope))
+        return PBMExecutionResult(envelope: envelope, exitCode: exitCode, output: PBMJSON.encode(envelope))
     }
 
     public static func failure(
@@ -28,25 +28,25 @@ public struct PBWExecutionResult {
         details: Any = [:],
         retryHint: String? = nil,
         exitCode: Int32 = 1,
-    ) -> PBWExecutionResult {
+    ) -> PBMExecutionResult {
         var error: [String: Any] = [
             "code": code,
             "message": message,
-            "details": PBWJSON.normalized(details),
+            "details": PBMJSON.normalized(details),
         ]
         if let retryHint {
             error["retryHint"] = retryHint
         }
         let envelope: [String: Any] = [
-            "schemaVersion": pbwStableSchemaVersion,
+            "schemaVersion": pbmStableSchemaVersion,
             "ok": false,
             "error": error,
         ]
-        return PBWExecutionResult(envelope: envelope, exitCode: exitCode, output: PBWJSON.encode(envelope))
+        return PBMExecutionResult(envelope: envelope, exitCode: exitCode, output: PBMJSON.encode(envelope))
     }
 }
 
-public enum PBWJSON {
+public enum PBMJSON {
     public static func encode(_ object: Any, pretty: Bool = false) -> Data {
         let normalized = normalized(object)
         let options: JSONSerialization.WritingOptions = pretty ? [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes] : [.sortedKeys, .withoutEscapingSlashes]
@@ -54,7 +54,7 @@ public enum PBWJSON {
               let data = try? JSONSerialization.data(withJSONObject: normalized, options: options)
         else {
             let fallback: [String: Any] = [
-                "schemaVersion": pbwStableSchemaVersion,
+                "schemaVersion": pbmStableSchemaVersion,
                 "ok": false,
                 "error": [
                     "code": "internal.serialization",
@@ -69,7 +69,7 @@ public enum PBWJSON {
 
     public static func parseObject(_ data: Data) throws -> [String: Any] {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw PBWError.invalidArgument("Expected a JSON object.")
+            throw PBMError.invalidArgument("Expected a JSON object.")
         }
         return object
     }
@@ -97,7 +97,7 @@ public enum PBWJSON {
         case let float as Float:
             return float.isFinite ? Double(float) : NSNull()
         case let date as Date:
-            return PBWTime.string(from: date)
+            return PBMTime.string(from: date)
         case let url as URL:
             return url.path
         case let dict as [String: Any]:
@@ -120,7 +120,7 @@ public enum PBWJSON {
     }
 }
 
-public enum PBWTime {
+public enum PBMTime {
     private static func formatter() -> ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -136,7 +136,7 @@ public enum PBWTime {
     }
 }
 
-public enum PBWError: Error, CustomStringConvertible {
+public enum PBMError: Error, CustomStringConvertible {
     case invalidArgument(String)
     case internalFailure(String)
 

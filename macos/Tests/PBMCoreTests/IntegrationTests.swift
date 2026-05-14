@@ -1,5 +1,5 @@
 import Foundation
-@testable import PBWCore
+@testable import PBMCore
 import XCTest
 
 final class IntegrationTests: XCTestCase {
@@ -7,20 +7,20 @@ final class IntegrationTests: XCTestCase {
 
     override func setUpWithError() throws {
         tempHome = FileManager.default.temporaryDirectory
-            .appendingPathComponent("pbw-integration-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("pbm-integration-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempHome, withIntermediateDirectories: true)
-        setenv("PBW_HOME", tempHome.path, 1)
+        setenv("PBM_HOME", tempHome.path, 1)
     }
 
     override func tearDownWithError() throws {
-        unsetenv("PBW_HOME")
+        unsetenv("PBM_HOME")
         if let tempHome {
             try? FileManager.default.removeItem(at: tempHome)
         }
     }
 
     func testConfigSnapshotAndCapabilityCommandsReturnStableEnvelopes() throws {
-        let runtime = PBWRuntime()
+        let runtime = PBMRuntime()
 
         assertEnvelope(runtime.runCLI(arguments: ["config", "init", "--force"]), ok: true)
         assertEnvelope(runtime.runCLI(arguments: ["config", "validate"]), ok: true)
@@ -34,7 +34,7 @@ final class IntegrationTests: XCTestCase {
     }
 
     func testLiveSessionLifecycleDoesNotRequireCapturePermissionsUntilFrame() throws {
-        let runtime = PBWRuntime()
+        let runtime = PBMRuntime()
 
         let start = runtime.runCLI(arguments: ["capture", "live", "start", "--id", "integration-live"])
         assertEnvelope(start, ok: true)
@@ -51,7 +51,7 @@ final class IntegrationTests: XCTestCase {
     }
 
     func testCLIDestructiveConfirmationPolicyAppliesBeforeNativeWork() throws {
-        let result = PBWRuntime().runCLI(arguments: ["window", "close"])
+        let result = PBMRuntime().runCLI(arguments: ["window", "close"])
         assertEnvelope(result, ok: false)
         XCTAssertEqual(result.exitCode, 2)
         let error = try XCTUnwrap(result.envelope["error"] as? [String: Any])
@@ -59,12 +59,12 @@ final class IntegrationTests: XCTestCase {
     }
 
     private func assertEnvelope(
-        _ result: PBWExecutionResult,
+        _ result: PBMExecutionResult,
         ok: Bool,
         file: StaticString = #filePath,
         line: UInt = #line,
     ) {
-        XCTAssertEqual(result.envelope["schemaVersion"] as? String, pbwStableSchemaVersion, file: file, line: line)
+        XCTAssertEqual(result.envelope["schemaVersion"] as? String, pbmStableSchemaVersion, file: file, line: line)
         XCTAssertEqual(result.envelope["ok"] as? Bool, ok, file: file, line: line)
         if ok {
             XCTAssertNotNil(result.envelope["data"], file: file, line: line)

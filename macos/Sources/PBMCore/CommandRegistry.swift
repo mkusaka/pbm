@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PBWCommandSpec: Sendable {
+public struct PBMCommandSpec: Sendable {
     public let name: String
     public let cliPaths: [[String]]
     public let summary: String
@@ -18,8 +18,8 @@ public struct PBWCommandSpec: Sendable {
     }
 }
 
-public enum PBWCommandRegistry {
-    public static let commands: [PBWCommandSpec] = [
+public enum PBMCommandRegistry {
+    public static let commands: [PBMCommandSpec] = [
         .init("help", [["help"], ["--help"], ["-h"]], "Show command help."),
         .init("mcp", [["mcp"]], "Run the MCP stdio server."),
 
@@ -132,8 +132,8 @@ public enum PBWCommandRegistry {
         .init("diagnostics.doctor", [["diagnostics", "doctor"], ["doctor"]], "Run local diagnostics."),
     ]
 
-    public static func findCLI(arguments: [String]) -> (PBWCommandSpec, Int)? {
-        var best: (PBWCommandSpec, Int)?
+    public static func findCLI(arguments: [String]) -> (PBMCommandSpec, Int)? {
+        var best: (PBMCommandSpec, Int)?
         for spec in commands {
             for path in spec.cliPaths {
                 guard arguments.count >= path.count else { continue }
@@ -146,7 +146,7 @@ public enum PBWCommandRegistry {
         return best
     }
 
-    public static func byName(_ name: String) -> PBWCommandSpec? {
+    public static func byName(_ name: String) -> PBMCommandSpec? {
         commands.first { $0.name == name }
     }
 
@@ -167,15 +167,15 @@ public enum PBWCommandRegistry {
             ])
         }
         return [
-            "command": "pbw",
-            "schemaVersion": pbwStableSchemaVersion,
+            "command": "pbm",
+            "schemaVersion": pbmStableSchemaVersion,
             "groups": groups,
             "mcpToolNames": commands.filter { $0.name != "help" && $0.name != "mcp" }.map(\.name).sorted(),
         ]
     }
 }
 
-public struct PBWArguments {
+public struct PBMArguments {
     public let options: [String: Any]
     public let positionals: [String]
 
@@ -184,7 +184,7 @@ public struct PBWArguments {
         self.positionals = positionals
     }
 
-    public static func parse(_ args: [String]) -> PBWArguments {
+    public static func parse(_ args: [String]) -> PBMArguments {
         var options: [String: Any] = [:]
         var positionals: [String] = []
         var index = 0
@@ -211,15 +211,15 @@ public struct PBWArguments {
             }
             index += 1
         }
-        return PBWArguments(options: options, positionals: positionals)
+        return PBMArguments(options: options, positionals: positionals)
     }
 
-    public func merged(with object: [String: Any]) -> PBWArguments {
+    public func merged(with object: [String: Any]) -> PBMArguments {
         var merged = options
         for (key, value) in object {
             merged[key] = value
         }
-        return PBWArguments(options: merged, positionals: positionals)
+        return PBMArguments(options: merged, positionals: positionals)
     }
 
     public func string(_ key: String, fallback: String? = nil) -> String? {

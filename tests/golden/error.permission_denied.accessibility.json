@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "pbw.stable.v1",
+  "schemaVersion": "pbm.stable.v1",
   "ok": false,
   "error": {
     "code": "permission_denied.accessibility",
@@ -7,6 +7,6 @@
     "details": {
       "service": "Accessibility"
     },
-    "retryHint": "Run `pbw diagnostics doctor` after granting permission."
+    "retryHint": "Run `pbm diagnostics doctor` after granting permission."
   }
 }

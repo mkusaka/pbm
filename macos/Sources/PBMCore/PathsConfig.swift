@@ -1,11 +1,11 @@
 import Foundation
 
-public enum PBWPaths {
+public enum PBMPaths {
     public static var home: URL {
-        if let override = ProcessInfo.processInfo.environment["PBW_HOME"], !override.isEmpty {
+        if let override = ProcessInfo.processInfo.environment["PBM_HOME"], !override.isEmpty {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".pbw", isDirectory: true)
+        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".pbm", isDirectory: true)
     }
 
     public static var config: URL {
@@ -42,7 +42,7 @@ public enum PBWPaths {
 
     public static var launchAgent: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/io.github.mkusaka.pbw.daemon.plist")
+            .appendingPathComponent("Library/LaunchAgents/io.github.mkusaka.pbm.daemon.plist")
     }
 
     public static func ensureBaseDirectories() throws {
@@ -52,16 +52,16 @@ public enum PBWPaths {
     }
 }
 
-public struct PBWConfig {
+public struct PBMConfig {
     public var raw: [String: Any]
 
-    public init(raw: [String: Any] = PBWConfig.defaultRaw) {
+    public init(raw: [String: Any] = PBMConfig.defaultRaw) {
         self.raw = raw
     }
 
     public static var defaultRaw: [String: Any] {
         [
-            "schemaVersion": "pbw.config.v1",
+            "schemaVersion": "pbm.config.v1",
             "mode": "direct",
             "safety": [
                 "confirmDestructiveActions": true,
@@ -91,10 +91,10 @@ public struct PBWConfig {
                 "scope": "frontmost",
             ],
             "daemon": [
-                "socket": PBWPaths.daemonSocket.path,
+                "socket": PBMPaths.daemonSocket.path,
             ],
             "bridge": [
-                "bundleIdentifier": "io.github.mkusaka.pbw.bridge",
+                "bundleIdentifier": "io.github.mkusaka.pbm.bridge",
                 "installed": false,
             ],
             "capture": [
@@ -104,24 +104,24 @@ public struct PBWConfig {
         ]
     }
 
-    public static func load() -> PBWConfig {
-        guard let data = try? Data(contentsOf: PBWPaths.config),
+    public static func load() -> PBMConfig {
+        guard let data = try? Data(contentsOf: PBMPaths.config),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
-            return PBWConfig()
+            return PBMConfig()
         }
-        return PBWConfig(raw: merge(defaults: defaultRaw, override: object))
+        return PBMConfig(raw: merge(defaults: defaultRaw, override: object))
     }
 
     public func save() throws {
-        try PBWPaths.ensureBaseDirectories()
-        try PBWJSON.encode(raw, pretty: true).write(to: PBWPaths.config, options: .atomic)
+        try PBMPaths.ensureBaseDirectories()
+        try PBMJSON.encode(raw, pretty: true).write(to: PBMPaths.config, options: .atomic)
     }
 
     public func validate() -> [String: Any] {
         var issues: [[String: Any]] = []
-        if raw.string("schemaVersion") != "pbw.config.v1" {
-            issues.append(["path": "schemaVersion", "message": "Expected pbw.config.v1."])
+        if raw.string("schemaVersion") != "pbm.config.v1" {
+            issues.append(["path": "schemaVersion", "message": "Expected pbm.config.v1."])
         }
         if value(at: "safety.confirmDestructiveActions") as? Bool == nil {
             issues.append(["path": "safety.confirmDestructiveActions", "message": "Expected boolean."])
@@ -203,8 +203,8 @@ public struct PBWConfig {
     }
 }
 
-public enum PBWRedactor {
-    public static func redact(_ value: String, config: PBWConfig) -> String {
+public enum PBMRedactor {
+    public static func redact(_ value: String, config: PBMConfig) -> String {
         var output = value
         for pattern in config.stringArray(at: "redaction.patterns") {
             if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
@@ -215,7 +215,7 @@ public enum PBWRedactor {
         return output
     }
 
-    public static func redactJSON(_ value: Any, config: PBWConfig) -> Any {
+    public static func redactJSON(_ value: Any, config: PBMConfig) -> Any {
         switch value {
         case let string as String:
             return redact(string, config: config)

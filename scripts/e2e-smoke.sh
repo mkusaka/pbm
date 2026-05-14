@@ -2,16 +2,16 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-PBW_BIN=${PBW_BIN:-"$(swift build --show-bin-path)/pbw"}
+PBM_BIN=${PBM_BIN:-"$(swift build --show-bin-path)/pbm"}
 
-if [[ ! -x "$PBW_BIN" ]]; then
-  echo "pbw binary was not found at $PBW_BIN. Run swift build first." >&2
+if [[ ! -x "$PBM_BIN" ]]; then
+  echo "pbm binary was not found at $PBM_BIN. Run swift build first." >&2
   exit 1
 fi
 
-PBW_HOME=$(mktemp -d "${TMPDIR:-/tmp}/pbw-e2e.XXXXXX")
-export PBW_HOME
-trap 'rm -rf "$PBW_HOME"' EXIT
+PBM_HOME=$(mktemp -d "${TMPDIR:-/tmp}/pbm-e2e.XXXXXX")
+export PBM_HOME
+trap 'rm -rf "$PBM_HOME"' EXIT
 
 assert_envelope() {
   local expected_ok=$1
@@ -20,7 +20,7 @@ assert_envelope() {
     expected_ok = ARGV[0] == "true"
     expected_code = ARGV[1]
     object = JSON.parse(STDIN.read)
-    abort("schemaVersion mismatch") unless object["schemaVersion"] == "pbw.stable.v1"
+    abort("schemaVersion mismatch") unless object["schemaVersion"] == "pbm.stable.v1"
     abort("ok mismatch: #{object.inspect}") unless object["ok"] == expected_ok
     if expected_ok
       abort("missing data") unless object.key?("data")
@@ -34,7 +34,7 @@ assert_envelope() {
 }
 
 run_ok() {
-  "$PBW_BIN" "$@" | assert_envelope true
+  "$PBM_BIN" "$@" | assert_envelope true
 }
 
 run_error() {
@@ -43,7 +43,7 @@ run_error() {
   shift 2
   local output
   set +e
-  output=$("$PBW_BIN" "$@" 2>&1)
+  output=$("$PBM_BIN" "$@" 2>&1)
   local status=$?
   set -e
   if [[ $status -ne $expected_exit ]]; then
@@ -67,7 +67,7 @@ mcp_output=$(
     '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
     '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
     '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"space.move-window","arguments":{}}}' \
-    | "$PBW_BIN" mcp
+    | "$PBM_BIN" mcp
 )
 
 printf '%s' "$mcp_output" | ruby -rjson -e '
@@ -95,12 +95,12 @@ printf '%s' "$mcp_output" | ruby -rjson -e '
     abort("missing additionalProperties false") unless tool.dig("inputSchema", "additionalProperties") == false
   end
   envelope = messages[2]["result"]
-  abort("MCP tool envelope schema mismatch") unless envelope["schemaVersion"] == "pbw.stable.v1"
+  abort("MCP tool envelope schema mismatch") unless envelope["schemaVersion"] == "pbm.stable.v1"
   abort("MCP tool call should fail honestly") unless envelope["ok"] == false
   abort("MCP tool error mismatch") unless envelope.dig("error", "code") == "capability_unavailable.space_move"
 '
 
 if [[ "${RUN_MAC_UI_TESTS:-}" == "true" ]]; then
-  run_ok image --mode screen --path "$PBW_HOME/screen.png"
+  run_ok image --mode screen --path "$PBM_HOME/screen.png"
   run_ok observe see
 fi

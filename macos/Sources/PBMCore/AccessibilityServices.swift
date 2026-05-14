@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-enum PBWAX {
+enum PBMAX {
     private static let axLinkRole = "AXLink"
     private static let axDialogSubrole = "AXDialog"
 
@@ -12,22 +12,20 @@ enum PBWAX {
         let dialogs: [[String: Any]]
         let menubar: [[String: Any]]
         let limits: [String: Any]
+        let error: PBMExecutionResult?
     }
 
-    static func snapshotElements(config: PBWConfig) -> AXSnapshot {
-        guard PBWNative.accessibilityAllowed() else {
-            return AXSnapshot(elements: [], menus: [], dialogs: [], menubar: [], limits: ["accessibility": "permission_denied"])
-        }
+    static func snapshotElements(config: PBMConfig) -> AXSnapshot {
         let maxCount = config.value(at: "snapshot.maxElementCount") as? Int ?? 500
         let maxDepth = config.value(at: "snapshot.maxDepth") as? Int ?? 8
-        let apps: [NSRunningApplication] = if config.value(at: "snapshot.scope") as? String == "allApps" {
-            NSWorkspace.shared.runningApplications
-                .filter { $0.activationPolicy == .regular || $0.isActive }
-                .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
-        } else if let frontmost = NSWorkspace.shared.frontmostApplication {
-            [frontmost]
-        } else {
-            []
+        let selection = selectedApps(config: config)
+        if let error = selection.error {
+            return AXSnapshot(elements: [], menus: [], dialogs: [], menubar: [], limits: selection.limits(maxCount: maxCount, maxDepth: maxDepth, truncated: false), error: error)
+        }
+        guard PBMNative.accessibilityAllowed() else {
+            var limits = selection.limits(maxCount: maxCount, maxDepth: maxDepth, truncated: false)
+            limits["accessibility"] = "permission_denied"
+            return AXSnapshot(elements: [], menus: [], dialogs: [], menubar: [], limits: limits, error: nil)
         }
         var counters: [String: Int] = [:]
         var elements: [[String: Any]] = []
@@ -36,7 +34,7 @@ enum PBWAX {
         var menubar: [[String: Any]] = []
         var truncated = false
 
-        for app in apps {
+        for app in selection.apps {
             if elements.count >= maxCount {
                 truncated = true
                 break
@@ -61,17 +59,147 @@ enum PBWAX {
             menus: menus,
             dialogs: dialogs,
             menubar: menubar,
-            limits: [
-                "maxElementCount": maxCount,
-                "maxDepth": maxDepth,
-                "truncated": truncated,
-                "scope": config.value(at: "snapshot.scope") as? String ?? "frontmost",
-            ],
+            limits: selection.limits(maxCount: maxCount, maxDepth: maxDepth, truncated: truncated),
+            error: nil,
         )
     }
 
+    private struct AppSelection {
+        let apps: [NSRunningApplication]
+        let scope: String
+        let target: [String: Any]
+        let error: PBMExecutionResult?
+
+        func limits(maxCount: Int, maxDepth: Int, truncated: Bool) -> [String: Any] {
+            var output: [String: Any] = [
+                "maxElementCount": maxCount,
+                "maxDepth": maxDepth,
+                "truncated": truncated,
+                "scope": scope,
+                "matchedApplications": apps.map { app in
+                    [
+                        "pid": app.processIdentifier,
+                        "name": app.localizedName ?? "",
+                        "bundleIdentifier": app.bundleIdentifier ?? "",
+                    ]
+                },
+            ]
+            if !target.isEmpty {
+                output["target"] = target
+            }
+            return output
+        }
+    }
+
+    private static func selectedApps(config: PBMConfig) -> AppSelection {
+        let requestedScope = config.value(at: "snapshot.scope") as? String ?? "frontmost"
+        let pid = config.value(at: "snapshot.pid") as? Int
+        let bundleIdentifier = config.value(at: "snapshot.bundleIdentifier") as? String
+        let appName = config.value(at: "snapshot.appName") as? String
+        var selectors: [String] = []
+        if pid != nil { selectors.append("pid") }
+        if let bundleIdentifier, !bundleIdentifier.isEmpty { selectors.append("bundleIdentifier") }
+        if let appName, !appName.isEmpty { selectors.append("appName") }
+
+        if selectors.count > 1 || !selectors.isEmpty && requestedScope != "frontmost" {
+            return AppSelection(
+                apps: [],
+                scope: requestedScope,
+                target: [
+                    "selectors": selectors,
+                    "scope": requestedScope,
+                ],
+                error: .failure(
+                    code: "invalid_argument.conflicting_snapshot_target",
+                    message: "Pass only one snapshot target selector.",
+                    details: [
+                        "selectors": selectors,
+                        "scope": requestedScope,
+                    ],
+                    exitCode: 2,
+                ),
+            )
+        }
+
+        if let pid {
+            let matches = NSWorkspace.shared.runningApplications.filter { Int($0.processIdentifier) == pid }
+            return targetedSelection(matches: matches, scope: "app", target: ["pid": pid])
+        }
+        if let bundleIdentifier, !bundleIdentifier.isEmpty {
+            let matches = NSWorkspace.shared.runningApplications.filter { $0.bundleIdentifier == bundleIdentifier }
+            return targetedSelection(matches: matches, scope: "app", target: ["bundleIdentifier": bundleIdentifier])
+        }
+        if let appName, !appName.isEmpty {
+            let matches = NSWorkspace.shared.runningApplications.filter {
+                ($0.activationPolicy == .regular || $0.isActive) &&
+                    ($0.localizedName ?? "").localizedCaseInsensitiveContains(appName)
+            }
+            return targetedSelection(matches: matches, scope: "app", target: ["appName": appName])
+        }
+
+        switch requestedScope {
+        case "frontmost":
+            return AppSelection(apps: NSWorkspace.shared.frontmostApplication.map { [$0] } ?? [], scope: "frontmost", target: [:], error: nil)
+        case "allApps":
+            let apps = NSWorkspace.shared.runningApplications
+                .filter { $0.activationPolicy == .regular || $0.isActive }
+                .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
+            return AppSelection(apps: apps, scope: "allApps", target: [:], error: nil)
+        default:
+            return AppSelection(
+                apps: [],
+                scope: requestedScope,
+                target: ["scope": requestedScope],
+                error: .failure(
+                    code: "invalid_argument.snapshot_scope",
+                    message: "Snapshot scope must be frontmost or allApps.",
+                    details: ["scope": requestedScope],
+                    exitCode: 2,
+                ),
+            )
+        }
+    }
+
+    private static func targetedSelection(matches: [NSRunningApplication], scope: String, target: [String: Any]) -> AppSelection {
+        let apps = matches.sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
+        if apps.isEmpty {
+            return AppSelection(
+                apps: [],
+                scope: scope,
+                target: target,
+                error: .failure(
+                    code: "target_not_found",
+                    message: "No running application matched the snapshot target.",
+                    details: ["target": target],
+                ),
+            )
+        }
+        if apps.count > 1 {
+            return AppSelection(
+                apps: apps,
+                scope: scope,
+                target: target,
+                error: .failure(
+                    code: "target_ambiguous",
+                    message: "Multiple running applications matched the snapshot target.",
+                    details: [
+                        "target": target,
+                        "matches": apps.map { app in
+                            [
+                                "pid": app.processIdentifier,
+                                "name": app.localizedName ?? "",
+                                "bundleIdentifier": app.bundleIdentifier ?? "",
+                            ]
+                        },
+                    ],
+                ),
+            )
+        }
+        return AppSelection(apps: apps, scope: scope, target: target, error: nil)
+    }
+
     static func focusedElement() -> AXUIElement? {
-        guard PBWNative.accessibilityAllowed() else { return nil }
+        guard PBMNative.accessibilityAllowed() else { return nil }
         let system = AXUIElementCreateSystemWide()
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &value) == .success else {
@@ -80,8 +208,8 @@ enum PBWAX {
         return (value as! AXUIElement)
     }
 
-    static func setFocusedValue(_ value: String) -> PBWExecutionResult {
-        guard PBWNative.accessibilityAllowed() else {
+    static func setFocusedValue(_ value: String) -> PBMExecutionResult {
+        guard PBMNative.accessibilityAllowed() else {
             return permissionDeniedAccessibility()
         }
         guard let element = focusedElement() else {
@@ -98,8 +226,8 @@ enum PBWAX {
         )
     }
 
-    static func performFocusedAction(_ action: String) -> PBWExecutionResult {
-        guard PBWNative.accessibilityAllowed() else {
+    static func performFocusedAction(_ action: String) -> PBMExecutionResult {
+        guard PBMNative.accessibilityAllowed() else {
             return permissionDeniedAccessibility()
         }
         guard let element = focusedElement() else {
@@ -117,8 +245,8 @@ enum PBWAX {
         )
     }
 
-    static func focusedAppMenuItems() -> PBWExecutionResult {
-        guard PBWNative.accessibilityAllowed() else {
+    static func focusedAppMenuItems() -> PBMExecutionResult {
+        guard PBMNative.accessibilityAllowed() else {
             return permissionDeniedAccessibility()
         }
         guard let app = NSWorkspace.shared.frontmostApplication else {
@@ -137,8 +265,8 @@ enum PBWAX {
         return .success(["app": app.localizedName ?? "", "pid": app.processIdentifier, "menus": elements])
     }
 
-    static func clickMenuItem(title: String) -> PBWExecutionResult {
-        guard PBWNative.accessibilityAllowed() else {
+    static func clickMenuItem(title: String) -> PBMExecutionResult {
+        guard PBMNative.accessibilityAllowed() else {
             return permissionDeniedAccessibility()
         }
         guard let app = NSWorkspace.shared.frontmostApplication else {
@@ -155,24 +283,24 @@ enum PBWAX {
         return .failure(code: "capability_unavailable.menu_press", message: "Menu item did not accept AXPress.", details: ["axError": String(describing: result)])
     }
 
-    static func dialogs() -> PBWExecutionResult {
-        guard PBWNative.accessibilityAllowed() else {
+    static func dialogs() -> PBMExecutionResult {
+        guard PBMNative.accessibilityAllowed() else {
             return permissionDeniedAccessibility()
         }
-        let snapshot = snapshotElements(config: PBWConfig.load())
+        let snapshot = snapshotElements(config: PBMConfig.load())
         return .success(["dialogs": snapshot.dialogs])
     }
 
-    static func permissionDeniedAccessibility() -> PBWExecutionResult {
+    static func permissionDeniedAccessibility() -> PBMExecutionResult {
         .failure(
             code: "permission_denied.accessibility",
             message: "Accessibility permission is required for this command.",
             details: [
                 "service": "Accessibility",
-                "bundle": Bundle.main.bundleIdentifier ?? "pbw",
-                "howToFix": "Grant Accessibility permission to the pbw executable or Bridge app in System Settings.",
+                "bundle": Bundle.main.bundleIdentifier ?? "pbm",
+                "howToFix": "Grant Accessibility permission to the pbm executable or Bridge app in System Settings.",
             ],
-            retryHint: "Run `pbw diagnostics doctor` after granting permission.",
+            retryHint: "Run `pbm diagnostics doctor` after granting permission.",
         )
     }
 
@@ -212,7 +340,7 @@ enum PBWAX {
             "depth": depth,
         ]
         if let rect {
-            item["bounds"] = PBWNative.rectDict(rect)
+            item["bounds"] = PBMNative.rectDict(rect)
         }
         if !(item.string("text") ?? "").isEmpty || isInteresting(role: role) {
             elements.append(item)
@@ -263,7 +391,7 @@ enum PBWAX {
                 "depth": depth,
             ]
             if let rect = frame(element) {
-                item["bounds"] = PBWNative.rectDict(rect)
+                item["bounds"] = PBMNative.rectDict(rect)
             }
             output.append(item)
         }
@@ -375,7 +503,7 @@ enum PBWAX {
     }
 }
 
-enum PBWDock {
+enum PBMDock {
     static func publicDockItems() -> [[String: Any]] {
         let apps = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }

@@ -1,6 +1,6 @@
 import Darwin
 import Foundation
-@testable import PBWCore
+@testable import PBMCore
 import XCTest
 
 final class ContractTests: XCTestCase {
@@ -8,31 +8,31 @@ final class ContractTests: XCTestCase {
 
     override func setUpWithError() throws {
         tempHome = FileManager.default.temporaryDirectory
-            .appendingPathComponent("pbw-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("pbm-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempHome, withIntermediateDirectories: true)
-        setenv("PBW_HOME", tempHome.path, 1)
+        setenv("PBM_HOME", tempHome.path, 1)
     }
 
     override func tearDownWithError() throws {
-        unsetenv("PBW_HOME")
+        unsetenv("PBM_HOME")
         if let tempHome {
             try? FileManager.default.removeItem(at: tempHome)
         }
     }
 
     func testSuccessAndFailureEnvelopeShapes() throws {
-        let success = PBWExecutionResult.success(["value": 1])
+        let success = PBMExecutionResult.success(["value": 1])
         assertStableEnvelope(success.envelope, ok: true)
         XCTAssertEqual(success.exitCode, 0)
 
-        let failure = PBWExecutionResult.failure(code: "target_not_found", message: "missing", exitCode: 1)
+        let failure = PBMExecutionResult.failure(code: "target_not_found", message: "missing", exitCode: 1)
         assertStableEnvelope(failure.envelope, ok: false)
         let error = try XCTUnwrap(failure.envelope["error"] as? [String: Any])
         XCTAssertEqual(error["code"] as? String, "target_not_found")
     }
 
     func testCommandRegistryCoversRequiredSurface() {
-        let names = Set(PBWCommandRegistry.commands.map(\.name))
+        let names = Set(PBMCommandRegistry.commands.map(\.name))
         let required = [
             "observe.see", "observe.image", "observe.capture.live.start", "observe.capture.live.frame",
             "observe.capture.live.status", "observe.capture.live.stop", "observe.capture.video.start",
@@ -61,7 +61,7 @@ final class ContractTests: XCTestCase {
     }
 
     func testDestructiveCommandsRequireConfirmationByDefault() throws {
-        let result = PBWRuntime().runCLI(arguments: ["clipboard", "clear"])
+        let result = PBMRuntime().runCLI(arguments: ["clipboard", "clear"])
         assertStableEnvelope(result.envelope, ok: false)
         XCTAssertEqual(result.exitCode, 2)
         let error = try XCTUnwrap(result.envelope["error"] as? [String: Any])
@@ -69,41 +69,89 @@ final class ContractTests: XCTestCase {
     }
 
     func testToolPolicyDeniesCLICommands() throws {
-        var config = PBWConfig()
+        var config = PBMConfig()
         config.set(value: ["app.list"], at: "policy.deny")
         try config.save()
 
-        let result = PBWRuntime().runCLI(arguments: ["app", "list"])
+        let result = PBMRuntime().runCLI(arguments: ["app", "list"])
         assertStableEnvelope(result.envelope, ok: false)
         let error = try XCTUnwrap(result.envelope["error"] as? [String: Any])
         XCTAssertEqual(error["code"] as? String, "tool_denied")
     }
 
     func testSnapshotStaleErrorIsStructured() throws {
-        try PBWPaths.ensureBaseDirectories()
+        try PBMPaths.ensureBaseDirectories()
         let id = "old"
-        let url = PBWPaths.snapshots.appendingPathComponent("\(id).json")
-        try PBWJSON.encode([
+        let url = PBMPaths.snapshots.appendingPathComponent("\(id).json")
+        try PBMJSON.encode([
             "id": id,
             "createdAt": "2026-01-01T00:00:00.000Z",
             "platform": "macos",
         ]).write(to: url)
         try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 0)], ofItemAtPath: url.path)
 
-        let result = PBWRuntime().runCLI(arguments: ["snapshot", "inspect", "--id", id, "--max-age", "0"])
+        let result = PBMRuntime().runCLI(arguments: ["snapshot", "inspect", "--id", id, "--max-age", "0"])
         assertStableEnvelope(result.envelope, ok: false)
         let error = try XCTUnwrap(result.envelope["error"] as? [String: Any])
         XCTAssertEqual(error["code"] as? String, "stale_snapshot")
     }
 
+    func testSnapshotInvalidScopeIsStructuredBeforeTCC() throws {
+        var config = PBMConfig()
+        config.set(value: "spaces", at: "snapshot.scope")
+
+        let result = PBMSnapshotStore().create(config: config)
+
+        assertStableEnvelope(result.envelope, ok: false)
+        XCTAssertEqual(result.exitCode, 2)
+        let error = try XCTUnwrap(result.envelope["error"] as? [String: Any])
+        XCTAssertEqual(error["code"] as? String, "invalid_argument.snapshot_scope")
+    }
+
+    func testSnapshotConflictingTargetsAreStructuredBeforeTCC() throws {
+        var config = PBMConfig()
+        config.set(value: "allApps", at: "snapshot.scope")
+        config.set(value: "com.example.Missing", at: "snapshot.bundleIdentifier")
+
+        let result = PBMSnapshotStore().create(config: config)
+
+        assertStableEnvelope(result.envelope, ok: false)
+        XCTAssertEqual(result.exitCode, 2)
+        let error = try XCTUnwrap(result.envelope["error"] as? [String: Any])
+        XCTAssertEqual(error["code"] as? String, "invalid_argument.conflicting_snapshot_target")
+    }
+
+    func testSnapshotMissingTargetIsStructuredBeforeTCC() throws {
+        var config = PBMConfig()
+        config.set(value: "com.example.Missing", at: "snapshot.bundleIdentifier")
+
+        let result = PBMSnapshotStore().create(config: config)
+
+        assertStableEnvelope(result.envelope, ok: false)
+        let error = try XCTUnwrap(result.envelope["error"] as? [String: Any])
+        XCTAssertEqual(error["code"] as? String, "target_not_found")
+    }
+
     func testMCPToolsListAndToolCallReturnStableEnvelope() throws {
-        let server = PBWMCPServer(runtime: PBWRuntime())
+        let server = PBMMCPServer(runtime: PBMRuntime())
         let list = server.toolList()
         XCTAssertFalse(list.isEmpty)
         for tool in list {
             let schema = try XCTUnwrap(tool["inputSchema"] as? [String: Any])
             XCTAssertEqual(schema["additionalProperties"] as? Bool, false)
         }
+        let observeSee = try XCTUnwrap(list.first { $0["name"] as? String == "observe.see" })
+        let observeSchema = try XCTUnwrap(observeSee["inputSchema"] as? [String: Any])
+        let observeProperties = try XCTUnwrap(observeSchema["properties"] as? [String: Any])
+        XCTAssertNotNil(observeProperties["scope"])
+        XCTAssertNotNil(observeProperties["bundle-id"])
+        XCTAssertNotNil(observeProperties["bundleId"])
+        XCTAssertNotNil(observeProperties["app-id"])
+        XCTAssertNotNil(observeProperties["appId"])
+        XCTAssertNotNil(observeProperties["pid"])
+        XCTAssertNotNil(observeProperties["app"])
+        XCTAssertNotNil(observeProperties["max-depth"])
+        XCTAssertNotNil(observeProperties["max-elements"])
 
         let response = try XCTUnwrap(server.handle(message: [
             "jsonrpc": "2.0",
@@ -129,7 +177,7 @@ final class ContractTests: XCTestCase {
         XCTAssertGreaterThan(fixtures.count, 0)
         var observedCodes: Set<String> = []
         for fixture in fixtures {
-            let object = try PBWJSON.parseObject(Data(contentsOf: fixture))
+            let object = try PBMJSON.parseObject(Data(contentsOf: fixture))
             let ok = try XCTUnwrap(object["ok"] as? Bool, fixture.lastPathComponent)
             assertStableEnvelope(object, ok: ok)
             if !ok, let error = object["error"] as? [String: Any], let code = error["code"] as? String {
@@ -150,7 +198,7 @@ final class ContractTests: XCTestCase {
     }
 
     private func assertStableEnvelope(_ envelope: [String: Any], ok: Bool, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertEqual(envelope["schemaVersion"] as? String, pbwStableSchemaVersion, file: file, line: line)
+        XCTAssertEqual(envelope["schemaVersion"] as? String, pbmStableSchemaVersion, file: file, line: line)
         XCTAssertEqual(envelope["ok"] as? Bool, ok, file: file, line: line)
         if ok {
             XCTAssertNotNil(envelope["data"], file: file, line: line)
@@ -168,6 +216,6 @@ final class ContractTests: XCTestCase {
             }
             url.deleteLastPathComponent()
         }
-        throw PBWError.internalFailure("Package.swift was not found.")
+        throw PBMError.internalFailure("Package.swift was not found.")
     }
 }

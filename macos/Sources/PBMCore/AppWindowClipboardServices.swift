@@ -2,8 +2,8 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-enum PBWClipboard {
-    static func get() -> PBWExecutionResult {
+enum PBMClipboard {
+    static func get() -> PBMExecutionResult {
         let pasteboard = NSPasteboard.general
         let text = pasteboard.string(forType: .string)
         return .success([
@@ -13,7 +13,7 @@ enum PBWClipboard {
         ])
     }
 
-    static func set(args: PBWArguments) -> PBWExecutionResult {
+    static func set(args: PBMArguments) -> PBMExecutionResult {
         guard let text = args.string("text") ?? args.positionals.first else {
             return .failure(code: "invalid_argument.missing_text", message: "--text is required.", exitCode: 2)
         }
@@ -23,21 +23,21 @@ enum PBWClipboard {
         return .success(["types": ["public.utf8-plain-text"], "characters": text.count])
     }
 
-    static func clear() -> PBWExecutionResult {
+    static func clear() -> PBMExecutionResult {
         NSPasteboard.general.clearContents()
         return .success(["cleared": true])
     }
 }
 
-enum PBWApp {
-    static func list() -> PBWExecutionResult {
+enum PBMApp {
+    static func list() -> PBMExecutionResult {
         let apps = NSWorkspace.shared.runningApplications
             .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
             .map(appData)
         return .success(["apps": apps])
     }
 
-    static func launch(args: PBWArguments) -> PBWExecutionResult {
+    static func launch(args: PBMArguments) -> PBMExecutionResult {
         guard let target = args.string("bundle-id") ?? args.string("bundleId") ?? args.string("path") ?? args.string("name") ?? args.positionals.first else {
             return .failure(code: "invalid_argument.missing_app", message: "--bundle-id, --path, or --name is required.", exitCode: 2)
         }
@@ -62,7 +62,7 @@ enum PBWApp {
         return .success(["app": box.launched.map(appData) ?? ["path": url.path], "strategy": "NSWorkspace"])
     }
 
-    static func focus(args: PBWArguments) -> PBWExecutionResult {
+    static func focus(args: PBMArguments) -> PBMExecutionResult {
         guard let app = find(args: args) else {
             return .failure(code: "target_not_found", message: "Application was not found.")
         }
@@ -70,7 +70,7 @@ enum PBWApp {
         return .success(["focused": ok, "app": appData(app), "strategy": "NSRunningApplication.activate"])
     }
 
-    static func quit(args: PBWArguments) -> PBWExecutionResult {
+    static func quit(args: PBMArguments) -> PBMExecutionResult {
         guard let app = find(args: args) else {
             return .failure(code: "target_not_found", message: "Application was not found.")
         }
@@ -78,7 +78,7 @@ enum PBWApp {
         return .success(["requested": ok, "app": appData(app), "strategy": "NSRunningApplication.terminate"])
     }
 
-    static func hide(args: PBWArguments, hidden: Bool) -> PBWExecutionResult {
+    static func hide(args: PBMArguments, hidden: Bool) -> PBMExecutionResult {
         guard let app = find(args: args) else {
             return .failure(code: "target_not_found", message: "Application was not found.")
         }
@@ -86,7 +86,7 @@ enum PBWApp {
         return .success(["hidden": hidden, "performed": ok, "app": appData(app)])
     }
 
-    static func open(args: PBWArguments) -> PBWExecutionResult {
+    static func open(args: PBMArguments) -> PBMExecutionResult {
         guard let target = args.string("url") ?? args.string("path") ?? args.positionals.first else {
             return .failure(code: "invalid_argument.missing_target", message: "--url or --path is required.", exitCode: 2)
         }
@@ -95,7 +95,7 @@ enum PBWApp {
         return .success(["opened": ok, "url": url.absoluteString, "strategy": "NSWorkspace.open"])
     }
 
-    static func relaunch(args: PBWArguments) -> PBWExecutionResult {
+    static func relaunch(args: PBMArguments) -> PBMExecutionResult {
         guard let app = find(args: args) else {
             return .failure(code: "target_not_found", message: "Application was not found.")
         }
@@ -103,11 +103,11 @@ enum PBWApp {
         let path = app.bundleURL?.path
         _ = app.terminate()
         Thread.sleep(forTimeInterval: 1.0)
-        let launchArgs = PBWArguments(options: ["bundle-id": bundleID ?? "", "path": path ?? ""], positionals: [])
+        let launchArgs = PBMArguments(options: ["bundle-id": bundleID ?? "", "path": path ?? ""], positionals: [])
         return launch(args: launchArgs)
     }
 
-    static func find(args: PBWArguments) -> NSRunningApplication? {
+    static func find(args: PBMArguments) -> NSRunningApplication? {
         if let pid = args.int("pid") {
             return NSRunningApplication(processIdentifier: pid_t(pid))
         }
@@ -120,7 +120,7 @@ enum PBWApp {
         }
     }
 
-    private static func applicationURL(target: String, args: PBWArguments) -> URL? {
+    private static func applicationURL(target: String, args: PBMArguments) -> URL? {
         if args.string("path") != nil || target.hasPrefix("/") {
             return URL(fileURLWithPath: target)
         }
@@ -145,12 +145,12 @@ enum PBWApp {
     }
 }
 
-enum PBWWindow {
-    static func list() -> PBWExecutionResult {
-        .success(["windows": PBWNative.windowList()])
+enum PBMWindow {
+    static func list() -> PBMExecutionResult {
+        .success(["windows": PBMNative.windowList()])
     }
 
-    static func focus(args: PBWArguments) -> PBWExecutionResult {
+    static func focus(args: PBMArguments) -> PBMExecutionResult {
         let resolved = resolveWindow(args: args)
         if let error = resolved.error { return error }
         guard let target = resolved.target else {
@@ -159,15 +159,15 @@ enum PBWWindow {
         if let pid = target["ownerPID"] as? Int, let app = NSRunningApplication(processIdentifier: pid_t(pid)) {
             _ = app.activate(options: [.activateAllWindows])
         }
-        if PBWNative.accessibilityAllowed(), let axWindow = axWindow(args: args, target: target) {
+        if PBMNative.accessibilityAllowed(), let axWindow = axWindow(args: args, target: target) {
             _ = AXUIElementPerformAction(axWindow, kAXRaiseAction as CFString)
         }
         return .success(["window": target, "strategy": "NSRunningApplication.activate+AXRaise"])
     }
 
-    static func setBounds(args: PBWArguments, moveOnly: Bool = false, resizeOnly: Bool = false) -> PBWExecutionResult {
-        guard PBWNative.accessibilityAllowed() else {
-            return PBWAX.permissionDeniedAccessibility()
+    static func setBounds(args: PBMArguments, moveOnly: Bool = false, resizeOnly: Bool = false) -> PBMExecutionResult {
+        guard PBMNative.accessibilityAllowed() else {
+            return PBMAX.permissionDeniedAccessibility()
         }
         let resolved = resolveWindow(args: args)
         if let error = resolved.error { return error }
@@ -195,9 +195,9 @@ enum PBWWindow {
         return .success(["performed": performed, "strategy": "Accessibility"])
     }
 
-    static func minimize(args: PBWArguments, minimized: Bool) -> PBWExecutionResult {
-        guard PBWNative.accessibilityAllowed() else {
-            return PBWAX.permissionDeniedAccessibility()
+    static func minimize(args: PBMArguments, minimized: Bool) -> PBMExecutionResult {
+        guard PBMNative.accessibilityAllowed() else {
+            return PBMAX.permissionDeniedAccessibility()
         }
         let resolved = resolveWindow(args: args)
         if let error = resolved.error { return error }
@@ -211,9 +211,9 @@ enum PBWWindow {
         return .failure(code: "capability_unavailable.window_minimize", message: "Window did not accept AXMinimized.", details: ["axError": String(describing: result)])
     }
 
-    static func maximize(args: PBWArguments, fullScreen: Bool) -> PBWExecutionResult {
-        guard PBWNative.accessibilityAllowed() else {
-            return PBWAX.permissionDeniedAccessibility()
+    static func maximize(args: PBMArguments, fullScreen: Bool) -> PBMExecutionResult {
+        guard PBMNative.accessibilityAllowed() else {
+            return PBMAX.permissionDeniedAccessibility()
         }
         let resolved = resolveWindow(args: args)
         if let error = resolved.error { return error }
@@ -227,9 +227,9 @@ enum PBWWindow {
         return .failure(code: "capability_unavailable.window_fullscreen", message: "Window did not accept AXFullScreen.", details: ["axError": String(describing: result)])
     }
 
-    static func close(args: PBWArguments) -> PBWExecutionResult {
-        guard PBWNative.accessibilityAllowed() else {
-            return PBWAX.permissionDeniedAccessibility()
+    static func close(args: PBMArguments) -> PBMExecutionResult {
+        guard PBMNative.accessibilityAllowed() else {
+            return PBMAX.permissionDeniedAccessibility()
         }
         let resolved = resolveWindow(args: args)
         if let error = resolved.error { return error }
@@ -252,8 +252,8 @@ enum PBWWindow {
         return .failure(code: "capability_unavailable.window_close", message: "Window did not expose a public close action.", details: ["axError": String(describing: result)])
     }
 
-    private static func resolveWindow(args: PBWArguments) -> (target: [String: Any]?, error: PBWExecutionResult?) {
-        let windows = PBWNative.windowList()
+    private static func resolveWindow(args: PBMArguments) -> (target: [String: Any]?, error: PBMExecutionResult?) {
+        let windows = PBMNative.windowList()
         if let windowID = args.int("window-id") ?? args.int("windowId") ?? args.int("handle") {
             return (windows.first { ($0["windowId"] as? Int) == windowID || ($0["handle"] as? Int) == windowID }, nil)
         }
@@ -274,7 +274,7 @@ enum PBWWindow {
         return (windows.first, nil)
     }
 
-    private static func axWindow(args _: PBWArguments, target: [String: Any]) -> AXUIElement? {
+    private static func axWindow(args _: PBMArguments, target: [String: Any]) -> AXUIElement? {
         guard let pid = target["ownerPID"] as? Int else { return nil }
         let app = AXUIElementCreateApplication(pid_t(pid))
         var windowsValue: CFTypeRef?

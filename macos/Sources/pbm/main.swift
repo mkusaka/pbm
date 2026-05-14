@@ -1,8 +1,8 @@
 import Darwin
 import Foundation
-import PBWCore
+import PBMCore
 
-let cli = PBWCLI()
+let cli = PBMCLI()
 let result = cli.run(arguments: Array(CommandLine.arguments.dropFirst()))
 if let output = result.output {
     FileHandle.standardOutput.write(output)

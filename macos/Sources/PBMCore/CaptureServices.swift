@@ -5,13 +5,13 @@ import CoreMedia
 import Foundation
 @preconcurrency import ScreenCaptureKit
 
-enum PBWObserve {
-    static func image(args: PBWArguments) -> PBWExecutionResult {
-        guard PBWNative.screenRecordingAllowed() else {
+enum PBMObserve {
+    static func image(args: PBMArguments) -> PBMExecutionResult {
+        guard PBMNative.screenRecordingAllowed() else {
             return permissionDeniedScreenRecording()
         }
         let mode = args.string("mode") ?? "screen"
-        let path = args.string("path") ?? PBWPaths.captures.appendingPathComponent("capture-\(Int(Date().timeIntervalSince1970)).png").path
+        let path = args.string("path") ?? PBMPaths.captures.appendingPathComponent("capture-\(Int(Date().timeIntervalSince1970)).png").path
         let url = URL(fileURLWithPath: path)
         do {
             let image: CGImage?
@@ -23,7 +23,7 @@ enum PBWObserve {
             switch mode {
             case "display", "screen":
                 let displayID = CGDirectDisplayID(args.int("display-id") ?? args.int("display") ?? Int(CGMainDisplayID()))
-                let content = try PBWVideoRecorder.waitForShareableContent()
+                let content = try PBMVideoRecorder.waitForShareableContent()
                 guard let display = content.displays.first(where: { $0.displayID == displayID }) ?? content.displays.first else {
                     return .failure(code: "target_not_found", message: "Display was not found.", details: ["displayID": Int(displayID)])
                 }
@@ -38,14 +38,14 @@ enum PBWObserve {
                 let bounds = CGRect(x: 0, y: 0, width: CGFloat(display.width), height: CGFloat(display.height))
                 metadata["display"] = [
                     "id": Int(display.displayID),
-                    "bounds": PBWNative.rectDict(bounds),
+                    "bounds": PBMNative.rectDict(bounds),
                     "scale": filter.pointPixelScale,
                 ]
             case "window":
                 guard let windowID = args.int("window-id") ?? args.int("windowId") ?? args.int("handle") else {
                     return .failure(code: "invalid_argument.missing_window", message: "--window-id is required for --mode window.", exitCode: 2)
                 }
-                let content = try PBWVideoRecorder.waitForShareableContent()
+                let content = try PBMVideoRecorder.waitForShareableContent()
                 guard let window = content.windows.first(where: { Int($0.windowID) == windowID }) else {
                     return .failure(code: "target_not_found", message: "Window was not found for capture.", details: ["windowId": windowID])
                 }
@@ -64,7 +64,7 @@ enum PBWObserve {
             guard let image else {
                 return .failure(code: "internal.capture_image", message: "macOS did not return an image.", details: metadata)
             }
-            try PBWNative.writePNG(image, to: url)
+            try PBMNative.writePNG(image, to: url)
             var data = metadata
             data["path"] = url.path
             data["width"] = image.width
@@ -73,7 +73,7 @@ enum PBWObserve {
             data["strategy"] = strategy
             return .success(data)
         } catch {
-            if PBWObserve.isScreenCapturePermissionError(error) {
+            if PBMObserve.isScreenCapturePermissionError(error) {
                 return permissionDeniedScreenRecording(error: error)
             }
             return .failure(code: "internal.capture_image", message: error.localizedDescription)
@@ -110,10 +110,10 @@ enum PBWObserve {
 
     private static func captureFirstStreamFrame(filter: SCContentFilter, config: SCStreamConfiguration) throws -> CapturedImage {
         let semaphore = DispatchSemaphore(value: 0)
-        let box = PBWFrameCaptureBox(semaphore: semaphore)
-        let output = PBWFrameCaptureOutput(box: box)
+        let box = PBMFrameCaptureBox(semaphore: semaphore)
+        let output = PBMFrameCaptureOutput(box: box)
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
-        try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: DispatchQueue(label: "pbw.image.frame"))
+        try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: DispatchQueue(label: "pbm.image.frame"))
         let startSemaphore = DispatchSemaphore(value: 0)
         final class StartBox: @unchecked Sendable {
             var error: Error?
@@ -138,18 +138,18 @@ enum PBWObserve {
         if let image {
             return CapturedImage(image: image, strategy: "ScreenCaptureKit.SCStream.firstFrame")
         }
-        throw frameError ?? PBWError.internalFailure("Timed out waiting for ScreenCaptureKit image frame.")
+        throw frameError ?? PBMError.internalFailure("Timed out waiting for ScreenCaptureKit image frame.")
     }
 
-    static func liveStart(args: PBWArguments) -> PBWExecutionResult {
+    static func liveStart(args: PBMArguments) -> PBMExecutionResult {
         do {
-            try PBWPaths.ensureBaseDirectories()
+            try PBMPaths.ensureBaseDirectories()
             let id = args.string("id") ?? "live-\(Int(Date().timeIntervalSince1970))"
             let session: [String: Any] = [
                 "id": id,
                 "kind": "live",
                 "status": "running",
-                "createdAt": PBWTime.nowString(),
+                "createdAt": PBMTime.nowString(),
                 "strategy": "timer-image-fallback",
                 "mode": args.string("mode") ?? "screen",
                 "metadata": [
@@ -157,19 +157,19 @@ enum PBWObserve {
                     "coordinateSpace": "logicalPoints",
                 ],
             ]
-            try PBWJSON.encode(session, pretty: true).write(to: PBWPaths.sessions.appendingPathComponent("\(id).json"), options: .atomic)
+            try PBMJSON.encode(session, pretty: true).write(to: PBMPaths.sessions.appendingPathComponent("\(id).json"), options: .atomic)
             return .success(session)
         } catch {
             return .failure(code: "internal.live_start", message: error.localizedDescription)
         }
     }
 
-    static func liveFrame(args: PBWArguments) -> PBWExecutionResult {
+    static func liveFrame(args: PBMArguments) -> PBMExecutionResult {
         let id = args.string("id")
         guard let session = session(kind: "live", id: id) else {
             return .failure(code: "target_not_found", message: "Live capture session was not found.", details: ["id": id ?? "latest"])
         }
-        let path = args.string("path") ?? PBWPaths.captures.appendingPathComponent("\(session["id"] ?? "live")-\(Int(Date().timeIntervalSince1970)).png").path
+        let path = args.string("path") ?? PBMPaths.captures.appendingPathComponent("\(session["id"] ?? "live")-\(Int(Date().timeIntervalSince1970)).png").path
         let imageArgs = args.merged(with: ["path": path, "mode": session["mode"] as? String ?? "screen"])
         let result = image(args: imageArgs)
         if result.envelope["ok"] as? Bool == true, var data = result.envelope["data"] as? [String: Any] {
@@ -180,7 +180,7 @@ enum PBWObserve {
         return result
     }
 
-    static func liveStatus(args: PBWArguments) -> PBWExecutionResult {
+    static func liveStatus(args: PBMArguments) -> PBMExecutionResult {
         let sessions = sessions(kind: "live")
         if let id = args.string("id") {
             guard let session = sessions.first(where: { ($0["id"] as? String) == id }) else {
@@ -191,12 +191,12 @@ enum PBWObserve {
         return .success(["sessions": sessions])
     }
 
-    static func liveStop(args: PBWArguments) -> PBWExecutionResult {
+    static func liveStop(args: PBMArguments) -> PBMExecutionResult {
         guard let session = session(kind: "live", id: args.string("id")) else {
             return .failure(code: "target_not_found", message: "Live capture session was not found.", details: ["id": args.string("id") ?? "latest"])
         }
         let id = session["id"] as? String ?? ""
-        let url = PBWPaths.sessions.appendingPathComponent("\(id).json")
+        let url = PBMPaths.sessions.appendingPathComponent("\(id).json")
         do {
             try FileManager.default.removeItem(at: url)
             return .success(["id": id, "status": "stopped"])
@@ -205,24 +205,24 @@ enum PBWObserve {
         }
     }
 
-    static func videoStart(args: PBWArguments) -> PBWExecutionResult {
-        guard PBWNative.screenRecordingAllowed() else {
+    static func videoStart(args: PBMArguments) -> PBMExecutionResult {
+        guard PBMNative.screenRecordingAllowed() else {
             return permissionDeniedScreenRecording()
         }
         guard let duration = args.double("duration") else {
             return .failure(
                 code: "capability_unavailable.video_background_session",
                 message: "Background video sessions require the daemon/Bridge runtime. Direct mode supports --duration only.",
-                details: ["supportedDirectMode": "pbw observe capture video start --duration <seconds> --path <file.mp4>"],
+                details: ["supportedDirectMode": "pbm observe capture video start --duration <seconds> --path <file.mp4>"],
             )
         }
         if #available(macOS 15.0, *) {
-            return PBWVideoRecorder.recordDuration(args: args, duration: duration)
+            return PBMVideoRecorder.recordDuration(args: args, duration: duration)
         }
         return .failure(code: "capability_unavailable.video_capture", message: "ScreenCaptureKit recording output requires macOS 15 or later.")
     }
 
-    static func videoStatus(args: PBWArguments) -> PBWExecutionResult {
+    static func videoStatus(args: PBMArguments) -> PBMExecutionResult {
         let sessions = sessions(kind: "video")
         if let id = args.string("id") {
             guard let session = sessions.first(where: { ($0["id"] as? String) == id }) else {
@@ -233,7 +233,7 @@ enum PBWObserve {
         return .success(["sessions": sessions])
     }
 
-    static func videoStop(args _: PBWArguments) -> PBWExecutionResult {
+    static func videoStop(args _: PBMArguments) -> PBMExecutionResult {
         .failure(
             code: "capability_unavailable.video_background_session",
             message: "Direct mode does not keep background ScreenCaptureKit video streams alive. Use --duration or Bridge/daemon when implemented.",
@@ -241,11 +241,11 @@ enum PBWObserve {
         )
     }
 
-    static func permissionDeniedScreenRecording(error: Error? = nil) -> PBWExecutionResult {
+    static func permissionDeniedScreenRecording(error: Error? = nil) -> PBMExecutionResult {
         var details: [String: Any] = [
             "service": "Screen Recording",
-            "bundle": Bundle.main.bundleIdentifier ?? "pbw",
-            "howToFix": "Grant Screen Recording permission to the pbw executable or Bridge app in System Settings.",
+            "bundle": Bundle.main.bundleIdentifier ?? "pbm",
+            "howToFix": "Grant Screen Recording permission to the pbm executable or Bridge app in System Settings.",
         ]
         if let error {
             details["nativeError"] = error.localizedDescription
@@ -254,7 +254,7 @@ enum PBWObserve {
             code: "permission_denied.screen_recording",
             message: "Screen Recording permission is required for capture.",
             details: details,
-            retryHint: "Run `pbw diagnostics doctor` after granting permission.",
+            retryHint: "Run `pbm diagnostics doctor` after granting permission.",
         )
     }
 
@@ -272,11 +272,11 @@ enum PBWObserve {
     }
 
     private static func sessions(kind: String) -> [[String: Any]] {
-        try? PBWPaths.ensureBaseDirectories()
-        let urls = (try? FileManager.default.contentsOfDirectory(at: PBWPaths.sessions, includingPropertiesForKeys: nil)) ?? []
+        try? PBMPaths.ensureBaseDirectories()
+        let urls = (try? FileManager.default.contentsOfDirectory(at: PBMPaths.sessions, includingPropertiesForKeys: nil)) ?? []
         return urls.compactMap { url in
             guard url.pathExtension == "json",
-                  let object = try? PBWJSON.parseObject(Data(contentsOf: url)),
+                  let object = try? PBMJSON.parseObject(Data(contentsOf: url)),
                   object["kind"] as? String == kind
             else {
                 return nil
@@ -286,7 +286,7 @@ enum PBWObserve {
     }
 }
 
-private final class PBWFrameCaptureBox: @unchecked Sendable {
+private final class PBMFrameCaptureBox: @unchecked Sendable {
     private let semaphore: DispatchSemaphore
     private let lock = NSLock()
     private var completed = false
@@ -308,11 +308,11 @@ private final class PBWFrameCaptureBox: @unchecked Sendable {
     }
 }
 
-private final class PBWFrameCaptureOutput: NSObject, SCStreamOutput {
+private final class PBMFrameCaptureOutput: NSObject, SCStreamOutput {
     private static let context = CIContext()
-    private let box: PBWFrameCaptureBox
+    private let box: PBMFrameCaptureBox
 
-    init(box: PBWFrameCaptureBox) {
+    init(box: PBMFrameCaptureBox) {
         self.box = box
     }
 
@@ -331,7 +331,7 @@ private final class PBWFrameCaptureOutput: NSObject, SCStreamOutput {
 }
 
 @available(macOS 15.0, *)
-final class PBWRecordingDelegate: NSObject, SCRecordingOutputDelegate {
+final class PBMRecordingDelegate: NSObject, SCRecordingOutputDelegate {
     var started = false
     var finished = false
     var error: Error?
@@ -351,12 +351,12 @@ final class PBWRecordingDelegate: NSObject, SCRecordingOutputDelegate {
 }
 
 @available(macOS 15.0, *)
-enum PBWVideoRecorder {
-    static func recordDuration(args: PBWArguments, duration: Double) -> PBWExecutionResult {
-        let outputPath = args.string("path") ?? PBWPaths.captures.appendingPathComponent("capture-\(Int(Date().timeIntervalSince1970)).mp4").path
+enum PBMVideoRecorder {
+    static func recordDuration(args: PBMArguments, duration: Double) -> PBMExecutionResult {
+        let outputPath = args.string("path") ?? PBMPaths.captures.appendingPathComponent("capture-\(Int(Date().timeIntervalSince1970)).mp4").path
         let outputURL = URL(fileURLWithPath: outputPath)
         do {
-            try PBWPaths.ensureBaseDirectories()
+            try PBMPaths.ensureBaseDirectories()
             try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: outputURL.path) {
                 try FileManager.default.removeItem(at: outputURL)
@@ -374,7 +374,7 @@ enum PBWVideoRecorder {
             config.queueDepth = 3
             config.showsCursor = args.bool("cursor", fallback: true)
             config.captureMicrophone = false
-            let delegate = PBWRecordingDelegate()
+            let delegate = PBMRecordingDelegate()
             let recordingConfig = SCRecordingOutputConfiguration()
             recordingConfig.outputURL = outputURL
             let recordingOutput = SCRecordingOutput(configuration: recordingConfig, delegate: delegate)
@@ -431,10 +431,10 @@ enum PBWVideoRecorder {
         }
         _ = semaphore.wait(timeout: .now() + 10)
         if let output = box.output { return output }
-        throw box.outputError ?? PBWError.internalFailure("Timed out waiting for ScreenCaptureKit content.")
+        throw box.outputError ?? PBMError.internalFailure("Timed out waiting for ScreenCaptureKit content.")
     }
 
-    private static func selectDisplay(content: SCShareableContent, args: PBWArguments) -> SCDisplay? {
+    private static func selectDisplay(content: SCShareableContent, args: PBMArguments) -> SCDisplay? {
         if let id = args.int("display-id") ?? args.int("display") {
             return content.displays.first { Int($0.displayID) == id }
         }

@@ -5,7 +5,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-enum PBWNative {
+enum PBMNative {
     static func rectDict(_ rect: CGRect) -> [String: Any] {
         [
             "x": Double(rect.origin.x),
@@ -100,15 +100,15 @@ enum PBWNative {
     static func writePNG(_ image: CGImage, to url: URL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            throw PBWError.internalFailure("Failed to create image destination.")
+            throw PBMError.internalFailure("Failed to create image destination.")
         }
         CGImageDestinationAddImage(destination, image, nil)
         if !CGImageDestinationFinalize(destination) {
-            throw PBWError.internalFailure("Failed to write PNG.")
+            throw PBMError.internalFailure("Failed to write PNG.")
         }
     }
 
-    static func parsePoint(_ args: PBWArguments, xKey: String = "x", yKey: String = "y") -> CGPoint? {
+    static func parsePoint(_ args: PBMArguments, xKey: String = "x", yKey: String = "y") -> CGPoint? {
         guard let x = args.double(xKey), let y = args.double(yKey) else {
             return nil
         }
@@ -124,16 +124,20 @@ enum PBWNative {
     }
 }
 
-public struct PBWSnapshotStore {
+public struct PBMSnapshotStore {
     public init() {}
 
-    public func create(config: PBWConfig, includeImage: Bool = false) -> PBWExecutionResult {
+    public func create(config: PBMConfig, includeImage: Bool = false) -> PBMExecutionResult {
         do {
-            try PBWPaths.ensureBaseDirectories()
-            let snapshot = buildSnapshot(config: config, includeImage: includeImage)
+            try PBMPaths.ensureBaseDirectories()
+            let built = buildSnapshot(config: config, includeImage: includeImage)
+            if let error = built.error {
+                return error
+            }
+            let snapshot = built.snapshot
             let id = snapshot["id"] as? String ?? "snapshot-\(Int(Date().timeIntervalSince1970))"
-            let url = PBWPaths.snapshots.appendingPathComponent("\(id).json")
-            try PBWJSON.encode(snapshot, pretty: true).write(to: url, options: .atomic)
+            let url = PBMPaths.snapshots.appendingPathComponent("\(id).json")
+            try PBMJSON.encode(snapshot, pretty: true).write(to: url, options: .atomic)
             var data = snapshot
             data["path"] = url.path
             return .success(data)
@@ -142,10 +146,10 @@ public struct PBWSnapshotStore {
         }
     }
 
-    public func list() -> PBWExecutionResult {
+    public func list() -> PBMExecutionResult {
         do {
-            try PBWPaths.ensureBaseDirectories()
-            let urls = try FileManager.default.contentsOfDirectory(at: PBWPaths.snapshots, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey])
+            try PBMPaths.ensureBaseDirectories()
+            let urls = try FileManager.default.contentsOfDirectory(at: PBMPaths.snapshots, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey])
                 .filter { $0.pathExtension == "json" }
                 .sorted { $0.lastPathComponent > $1.lastPathComponent }
             let items: [[String: Any]] = urls.map { url in
@@ -153,7 +157,7 @@ public struct PBWSnapshotStore {
                 return [
                     "id": url.deletingPathExtension().lastPathComponent,
                     "path": url.path,
-                    "modifiedAt": values?.contentModificationDate.map { PBWTime.string(from: $0) } ?? NSNull(),
+                    "modifiedAt": values?.contentModificationDate.map { PBMTime.string(from: $0) } ?? NSNull(),
                     "bytes": values?.fileSize ?? 0,
                 ]
             }
@@ -163,19 +167,19 @@ public struct PBWSnapshotStore {
         }
     }
 
-    public func show(id: String?) -> PBWExecutionResult {
+    public func show(id: String?) -> PBMExecutionResult {
         guard let url = resolveSnapshotURL(id: id) else {
             return .failure(code: "target_not_found", message: "Snapshot was not found.", details: ["id": id ?? "latest"])
         }
         do {
-            let object = try PBWJSON.parseObject(Data(contentsOf: url))
+            let object = try PBMJSON.parseObject(Data(contentsOf: url))
             return .success(object)
         } catch {
             return .failure(code: "internal.snapshot_read", message: error.localizedDescription, details: ["path": url.path])
         }
     }
 
-    public func inspect(args: PBWArguments) -> PBWExecutionResult {
+    public func inspect(args: PBMArguments) -> PBMExecutionResult {
         guard let url = resolveSnapshotURL(id: args.string("snapshot") ?? args.string("id")) else {
             return .failure(code: "target_not_found", message: "Snapshot was not found.")
         }
@@ -197,7 +201,7 @@ public struct PBWSnapshotStore {
                     }
                 }
             }
-            let snapshot = try PBWJSON.parseObject(Data(contentsOf: url))
+            let snapshot = try PBMJSON.parseObject(Data(contentsOf: url))
             let target = args.string("target") ?? args.string("element") ?? args.string("window")
             if let target {
                 for key in ["elements", "windows", "menus", "dialogs", "dock", "menubar", "spaces"] {
@@ -215,10 +219,10 @@ public struct PBWSnapshotStore {
         }
     }
 
-    public func clean(keep: Int) -> PBWExecutionResult {
+    public func clean(keep: Int) -> PBMExecutionResult {
         do {
-            try PBWPaths.ensureBaseDirectories()
-            let urls = try FileManager.default.contentsOfDirectory(at: PBWPaths.snapshots, includingPropertiesForKeys: nil)
+            try PBMPaths.ensureBaseDirectories()
+            let urls = try FileManager.default.contentsOfDirectory(at: PBMPaths.snapshots, includingPropertiesForKeys: nil)
                 .filter { $0.pathExtension == "json" }
                 .sorted { $0.lastPathComponent > $1.lastPathComponent }
             let removed = Array(urls.dropFirst(max(0, keep)))
@@ -231,7 +235,7 @@ public struct PBWSnapshotStore {
         }
     }
 
-    public func export(id: String?, path: String?) -> PBWExecutionResult {
+    public func export(id: String?, path: String?) -> PBMExecutionResult {
         guard let source = resolveSnapshotURL(id: id) else {
             return .failure(code: "target_not_found", message: "Snapshot was not found.", details: ["id": id ?? "latest"])
         }
@@ -252,43 +256,46 @@ public struct PBWSnapshotStore {
     }
 
     public func resolveSnapshotURL(id: String?) -> URL? {
-        try? PBWPaths.ensureBaseDirectories()
+        try? PBMPaths.ensureBaseDirectories()
         if let id, !id.isEmpty {
-            let url = PBWPaths.snapshots.appendingPathComponent("\(id).json")
+            let url = PBMPaths.snapshots.appendingPathComponent("\(id).json")
             return FileManager.default.fileExists(atPath: url.path) ? url : nil
         }
-        let urls = (try? FileManager.default.contentsOfDirectory(at: PBWPaths.snapshots, includingPropertiesForKeys: nil)) ?? []
+        let urls = (try? FileManager.default.contentsOfDirectory(at: PBMPaths.snapshots, includingPropertiesForKeys: nil)) ?? []
         return urls.filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent > $1.lastPathComponent }.first
     }
 
-    private func buildSnapshot(config: PBWConfig, includeImage _: Bool) -> [String: Any] {
-        let createdAt = PBWTime.nowString()
+    private func buildSnapshot(config: PBMConfig, includeImage _: Bool) -> (snapshot: [String: Any], error: PBMExecutionResult?) {
+        let createdAt = PBMTime.nowString()
         let safeID = createdAt
             .replacingOccurrences(of: ":", with: "")
             .replacingOccurrences(of: ".", with: "")
             .replacingOccurrences(of: "Z", with: "Z")
-        let windows = PBWNative.windowList()
-        let ax = PBWAX.snapshotElements(config: config)
+        let windows = PBMNative.windowList()
+        let ax = PBMAX.snapshotElements(config: config)
+        if let error = ax.error {
+            return ([:], error)
+        }
         var snapshot: [String: Any] = [
             "id": "macos-\(safeID)",
             "createdAt": createdAt,
             "platform": "macos",
             "mode": "direct",
-            "display": PBWNative.displays(),
+            "display": PBMNative.displays(),
             "windows": windows,
             "elements": ax.elements,
             "menus": ax.menus,
             "dialogs": ax.dialogs,
-            "dock": PBWDock.publicDockItems(),
+            "dock": PBMDock.publicDockItems(),
             "menubar": ax.menubar,
             "spaces": [],
             "ocrText": NSNull(),
             "imagePath": NSNull(),
             "metadata": [
-                "schemaVersion": pbwStableSchemaVersion,
+                "schemaVersion": pbmStableSchemaVersion,
                 "permissions": [
-                    "accessibility": PBWNative.accessibilityAllowed(),
-                    "screenRecording": PBWNative.screenRecordingAllowed(),
+                    "accessibility": PBMNative.accessibilityAllowed(),
+                    "screenRecording": PBMNative.screenRecordingAllowed(),
                 ],
                 "coordinateSpace": "logicalPoints",
                 "scale": "perDisplay",
@@ -300,8 +307,8 @@ public struct PBWSnapshotStore {
             ],
         ]
         if config.value(at: "redaction.snapshotText") as? Bool ?? true {
-            snapshot = PBWRedactor.redactJSON(snapshot, config: config) as? [String: Any] ?? snapshot
+            snapshot = PBMRedactor.redactJSON(snapshot, config: config) as? [String: Any] ?? snapshot
         }
-        return snapshot
+        return (snapshot, nil)
     }
 }

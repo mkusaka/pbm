@@ -8,13 +8,13 @@ let package = Package(
         .macOS(.v15),
     ],
     products: [
-        .executable(name: "pbw", targets: ["pbw"]),
-        .library(name: "PBWCore", targets: ["PBWCore"]),
+        .executable(name: "pbm", targets: ["pbm"]),
+        .library(name: "PBMCore", targets: ["PBMCore"]),
     ],
     targets: [
         .target(
-            name: "PBWCore",
-            path: "macos/Sources/PBWCore",
+            name: "PBMCore",
+            path: "macos/Sources/PBMCore",
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),
@@ -26,14 +26,14 @@ let package = Package(
             ],
         ),
         .executableTarget(
-            name: "pbw",
-            dependencies: ["PBWCore"],
-            path: "macos/Sources/pbw",
+            name: "pbm",
+            dependencies: ["PBMCore"],
+            path: "macos/Sources/pbm",
         ),
         .testTarget(
-            name: "PBWCoreTests",
-            dependencies: ["PBWCore"],
-            path: "macos/Tests/PBWCoreTests",
+            name: "PBMCoreTests",
+            dependencies: ["PBMCore"],
+            path: "macos/Tests/PBMCoreTests",
         ),
     ],
 )
