@@ -1,11 +1,11 @@
 # MCP
 
-`pbw mcp` runs a stdio MCP-compatible JSON-RPC server. It exposes the same command surface as the CLI.
+`pbm mcp` runs a stdio MCP-compatible JSON-RPC server. It exposes the same command surface as the CLI.
 
 ## Start
 
 ```sh
-pbw mcp
+pbm mcp
 ```
 
 The server supports:
@@ -29,6 +29,17 @@ Every tool schema is an object schema with:
 ```
 
 The property set is intentionally shared and conservative. Unknown properties are rejected by MCP clients that honor the schema.
+
+`observe.see` accepts the same snapshot selectors as the CLI:
+
+- `bundle-id` / `bundleId` / `app-id` / `appId`: exact running app bundle identifier.
+- `pid`: exact process id.
+- `app`: running app name substring.
+- `scope`: `frontmost` or `allApps`.
+- `max-depth` / `maxDepth`: per-call AX traversal depth.
+- `max-elements` / `maxElementCount`: per-call element limit.
+
+Pass only one target selector. Conflicts return `invalid_argument.conflicting_snapshot_target`; multiple app-name matches return `target_ambiguous`.
 
 ## Example
 
@@ -64,7 +75,7 @@ Result:
   "jsonrpc": "2.0",
   "id": 2,
   "result": {
-    "schemaVersion": "pbw.stable.v1",
+    "schemaVersion": "pbm.stable.v1",
     "ok": true,
     "data": {}
   }
@@ -77,7 +88,7 @@ The same `policy.allow` and `policy.deny` config is enforced for CLI and MCP. De
 
 ```json
 {
-  "schemaVersion": "pbw.stable.v1",
+  "schemaVersion": "pbm.stable.v1",
   "ok": false,
   "error": {
     "code": "tool_denied",

@@ -1,11 +1,11 @@
 # pbm
 
-`pbm` currently ships `pbw`, a deterministic macOS desktop automation CLI and MCP stdio server.
+`pbm` is a deterministic macOS desktop automation CLI and MCP stdio server.
 
 The macOS implementation is native Swift and returns the stable JSON contract:
 
 ```json
-{ "schemaVersion": "pbw.stable.v1", "ok": true, "data": {} }
+{ "schemaVersion": "pbm.stable.v1", "ok": true, "data": {} }
 ```
 
 Failures use the same envelope with structured error codes. Commands do not call AI models, agents, model providers, natural-language planners, shell execution tools, or remote public listeners.
@@ -15,27 +15,30 @@ Failures use the same envelope with structured error codes. Commands do not call
 ```sh
 swift build
 swift test
-.build/debug/pbw doctor
+.build/debug/pbm doctor
 ```
 
 Install the development binary wherever you want the public command name:
 
 ```sh
-install -m 0755 .build/debug/pbw /usr/local/bin/pbw
+install -m 0755 .build/debug/pbm /usr/local/bin/pbm
 ```
 
 ## Examples
 
 ```sh
-pbw doctor
-pbw config init
-pbw see
-pbw image --mode screen --path /tmp/pbw-screen.png
-pbw window list
-pbw app list
-pbw clipboard get
-pbw snapshot list
-pbw mcp
+pbm doctor
+pbm config init
+pbm see
+pbm see --bundle-id com.google.Chrome
+pbm see --app-id com.google.Chrome
+pbm see --scope allApps --max-elements 2000
+pbm image --mode screen --path /tmp/pbm-screen.png
+pbm window list
+pbm app list
+pbm clipboard get
+pbm snapshot list
+pbm mcp
 ```
 
 ## Documentation
@@ -43,6 +46,7 @@ pbw mcp
 - [macOS install, permissions, and validation](docs/macos.md)
 - [Command reference](docs/commands.md)
 - [MCP setup and tools](docs/mcp.md)
+- [Agent skill install](docs/skills.md)
 - [Native capability limits](docs/capabilities.md)
 
 ## Contract
@@ -53,7 +57,7 @@ Success:
 
 ```json
 {
-  "schemaVersion": "pbw.stable.v1",
+  "schemaVersion": "pbm.stable.v1",
   "ok": true,
   "data": {}
 }
@@ -63,7 +67,7 @@ Failure:
 
 ```json
 {
-  "schemaVersion": "pbw.stable.v1",
+  "schemaVersion": "pbm.stable.v1",
   "ok": false,
   "error": {
     "code": "target_not_found",

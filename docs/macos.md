@@ -1,6 +1,6 @@
 # macOS
 
-`pbw` v1 is a Swift Package for macOS 15+. It uses public native APIs only:
+`pbm` v1 is a Swift Package for macOS 15+. It uses public native APIs only:
 
 - Accessibility: `AXUIElement`
 - Capture: `ScreenCaptureKit` and CoreGraphics permission preflight
@@ -19,7 +19,7 @@ swift test
 The executable is generated at:
 
 ```sh
-.build/debug/pbw
+.build/debug/pbm
 ```
 
 ## Permissions
@@ -34,13 +34,13 @@ Grant permissions to the executable you run, or to a future signed Bridge app.
 Check current state:
 
 ```sh
-pbw doctor
+pbm doctor
 ```
 
 Open the Accessibility settings pane:
 
 ```sh
-pbw bridge open
+pbm bridge open
 ```
 
 ## Validation
@@ -48,17 +48,19 @@ pbw bridge open
 ```sh
 swift build
 swift test
-pbw doctor
-pbw config validate
-pbw see
-pbw image --mode screen --path /tmp/pbw-screen.png
-pbw snapshot list
+pbm doctor
+pbm config validate
+pbm see
+pbm see --bundle-id com.google.Chrome
+pbm see --scope allApps --max-elements 2000
+pbm image --mode screen --path /tmp/pbm-screen.png
+pbm snapshot list
 ```
 
 MCP smoke test:
 
 ```sh
-printf 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | pbw mcp
+printf 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | pbm mcp
 ```
 
 UI-dependent tests should be added behind:
@@ -69,10 +71,25 @@ RUN_MAC_UI_TESTS=true swift test
 
 The checked-in tests intentionally verify the JSON contract and command surface without requiring TCC permission prompts.
 
+## Accessibility Snapshots
+
+`pbm see` traverses the frontmost app's `AXUIElement` tree by default. To inspect another running app without focusing it first, pass one of:
+
+```sh
+pbm see --bundle-id com.google.Chrome
+pbm see --app-id com.google.Chrome
+pbm see --pid 12345
+pbm see --app Chrome
+pbm see --scope allApps --max-elements 2000
+```
+
+The snapshot metadata records the requested scope, matched applications, traversal depth, element limit, and whether traversal was truncated.
+Pass only one target selector. Ambiguous app-name matches are reported as `target_ambiguous` instead of choosing one implicitly.
+
 ## Modes
 
-- Direct mode: default. Runs each command in the current `pbw` process.
-- Daemon mode: `pbw daemon start` starts a same-user Unix-domain-socket daemon for local status/log coordination. No TCP listener is opened.
+- Direct mode: default. Runs each command in the current `pbm` process.
+- Daemon mode: `pbm daemon start` starts a same-user Unix-domain-socket daemon for local status/log coordination. No TCP listener is opened.
 - Bridge mode: commands exist for the permission-bearing app strategy, but v1 does not ship a signed `Bridge.app`. Bridge-only capabilities return structured `capability_unavailable.*` errors instead of pretending to work.
 
 ## Storage
@@ -80,11 +97,11 @@ The checked-in tests intentionally verify the JSON contract and command surface 
 Default state is under:
 
 ```sh
-~/.pbw/
+~/.pbm/
 ```
 
 Override for tests:
 
 ```sh
-PBW_HOME=/tmp/pbw-home pbw config init
+PBM_HOME=/tmp/pbm-home pbm config init
 ```
