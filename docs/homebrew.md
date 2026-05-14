@@ -57,5 +57,6 @@ From `mkusaka/homebrew-tap`:
 
 ```sh
 ruby -c Formula/pbm.rb
-brew readall --os=all --arch=all mkusaka/tap
+brew readall --os=sequoia --arch=all mkusaka/tap
+brew readall --os=tahoe --arch=all mkusaka/tap
 ```
