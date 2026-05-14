@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "pbw.stable.v1",
+  "ok": false,
+  "error": {
+    "code": "permission_denied.accessibility",
+    "message": "Accessibility permission is required for this command.",
+    "details": {
+      "service": "Accessibility"
+    },
+    "retryHint": "Run `pbw diagnostics doctor` after granting permission."
+  }
+}

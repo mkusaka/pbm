@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "pbw.stable.v1",
+  "ok": false,
+  "error": {
+    "code": "stale_snapshot",
+    "message": "Snapshot is older than the requested max age.",
+    "details": {
+      "id": "old",
+      "ageSeconds": 3600,
+      "maxAgeSeconds": 300
+    }
+  }
+}

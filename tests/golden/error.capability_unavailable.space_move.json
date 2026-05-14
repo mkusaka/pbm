@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "pbw.stable.v1",
+  "ok": false,
+  "error": {
+    "code": "capability_unavailable.space_move",
+    "message": "Moving a window to a Space is not exposed through stable public macOS APIs.",
+    "details": {
+      "publicAPI": false
+    }
+  }
+}

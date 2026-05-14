@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "pbw.stable.v1",
+  "ok": false,
+  "error": {
+    "code": "permission_denied.screen_recording",
+    "message": "Screen Recording permission is required for capture.",
+    "details": {
+      "service": "Screen Recording"
+    },
+    "retryHint": "Run `pbw diagnostics doctor` after granting permission."
+  }
+}

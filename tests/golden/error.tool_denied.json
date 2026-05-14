@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "pbw.stable.v1",
+  "ok": false,
+  "error": {
+    "code": "tool_denied",
+    "message": "Tool is denied by policy.",
+    "details": {
+      "tool": "app.list"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "pbw.stable.v1",
+  "ok": false,
+  "error": {
+    "code": "target_ambiguous",
+    "message": "Target matched multiple elements.",
+    "details": {
+      "matches": [
+        { "id": "B1", "title": "OK" },
+        { "id": "B2", "title": "OK" }
+      ]
+    }
+  }
+}

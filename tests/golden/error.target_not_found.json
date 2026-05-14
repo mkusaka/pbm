@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "pbw.stable.v1",
+  "ok": false,
+  "error": {
+    "code": "target_not_found",
+    "message": "Target was not found.",
+    "details": {
+      "target": "B99"
+    }
+  }
+}

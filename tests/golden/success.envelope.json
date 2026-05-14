@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "pbw.stable.v1",
+  "ok": true,
+  "data": {
+    "command": "pbw",
+    "platform": "macos"
+  }
+}
