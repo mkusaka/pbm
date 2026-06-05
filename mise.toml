@@ -1,7 +1,7 @@
 [tools]
 actionlint = "1.7.12"
 ghalint = "1.5.6"
-lefthook = "2.1.8"
+lefthook = "2.1.9"
 pinact = "3.10.1"
 swiftformat = "0.61.1"
 swiftlint = "0.63.3"
