@@ -188,9 +188,15 @@ enum PBMAX {
         let bundleIdentifier = config.value(at: "snapshot.bundleIdentifier") as? String
         let appName = config.value(at: "snapshot.appName") as? String
         var selectors: [String] = []
-        if pid != nil { selectors.append("pid") }
-        if let bundleIdentifier, !bundleIdentifier.isEmpty { selectors.append("bundleIdentifier") }
-        if let appName, !appName.isEmpty { selectors.append("appName") }
+        if pid != nil {
+            selectors.append("pid")
+        }
+        if let bundleIdentifier, !bundleIdentifier.isEmpty {
+            selectors.append("bundleIdentifier")
+        }
+        if let appName, !appName.isEmpty {
+            selectors.append("appName")
+        }
 
         if selectors.count > 1 || !selectors.isEmpty && requestedScope != "frontmost" {
             return AppSelection(
@@ -793,7 +799,9 @@ enum PBMAX {
 
     private static func stringValue(_ value: Any?) -> String? {
         guard let value else { return nil }
-        if value is NSNull { return nil }
+        if value is NSNull {
+            return nil
+        }
         let cfValue = value as CFTypeRef
         if CFGetTypeID(cfValue) == AXValueGetTypeID() {
             return nil

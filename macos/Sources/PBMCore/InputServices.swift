@@ -5,11 +5,15 @@ import Foundation
 enum PBMInput {
     static func click(args: PBMArguments) -> PBMExecutionResult {
         let resolved = PBMTargetResolver.resolve(args: args)
-        if let error = resolved.error { return error }
+        if let error = resolved.error {
+            return error
+        }
         guard let point = resolved.target?.point else {
             return .failure(code: "invalid_argument.missing_target", message: "Provide --x and --y or a resolvable target.", exitCode: 2)
         }
-        if let denied = permissionDeniedPostEvent() { return denied }
+        if let denied = permissionDeniedPostEvent() {
+            return denied
+        }
         let button: CGMouseButton = args.string("button") == "right" ? .right : .left
         let downType: CGEventType = button == .right ? .rightMouseDown : .leftMouseDown
         let upType: CGEventType = button == .right ? .rightMouseUp : .leftMouseUp
@@ -26,7 +30,9 @@ enum PBMInput {
     }
 
     static func move(args: PBMArguments) -> PBMExecutionResult {
-        if let denied = permissionDeniedPostEvent() { return denied }
+        if let denied = permissionDeniedPostEvent() {
+            return denied
+        }
         guard let point = PBMNative.parsePoint(args) else {
             return .failure(code: "invalid_argument.missing_coordinates", message: "--x and --y are required.", exitCode: 2)
         }
@@ -35,7 +41,9 @@ enum PBMInput {
         let delay = movementDelay(args: args, pointCount: path.count)
         for item in path {
             postMouse(type: .mouseMoved, point: item, button: .left)
-            if delay > 0 { usleep(delay) }
+            if delay > 0 {
+                usleep(delay)
+            }
         }
         return .success([
             "point": PBMNative.pointDict(point),
@@ -46,7 +54,9 @@ enum PBMInput {
     }
 
     static func drag(args: PBMArguments) -> PBMExecutionResult {
-        if let denied = permissionDeniedPostEvent() { return denied }
+        if let denied = permissionDeniedPostEvent() {
+            return denied
+        }
         guard let from = PBMNative.parsePoint(args, xKey: "from-x", yKey: "from-y"),
               let to = PBMNative.parsePoint(args, xKey: "to-x", yKey: "to-y")
         else {
@@ -56,10 +66,14 @@ enum PBMInput {
         let path = PBMMousePath.linear(from: from, to: to, steps: movementSteps(args: args))
         let delay = movementDelay(args: args, pointCount: path.count)
         for item in path {
-            if delay > 0 { usleep(delay) }
+            if delay > 0 {
+                usleep(delay)
+            }
             postMouse(type: .leftMouseDragged, point: item, button: .left)
         }
-        if delay == 0 { usleep(40000) }
+        if delay == 0 {
+            usleep(40000)
+        }
         postMouse(type: .leftMouseUp, point: to, button: .left)
         return .success([
             "from": PBMNative.pointDict(from),
@@ -77,8 +91,12 @@ enum PBMInput {
             return .failure(code: "invalid_argument.missing_delta", message: "--dy or --dx is required.", exitCode: 2)
         }
         let resolved = PBMTargetResolver.resolve(args: args, allowMissing: true)
-        if let error = resolved.error { return error }
-        if let denied = permissionDeniedPostEvent() { return denied }
+        if let error = resolved.error {
+            return error
+        }
+        if let denied = permissionDeniedPostEvent() {
+            return denied
+        }
         if let point = resolved.target?.point {
             postMouse(type: .mouseMoved, point: point, button: .left)
         }
@@ -89,7 +107,9 @@ enum PBMInput {
     }
 
     static func type(args: PBMArguments) -> PBMExecutionResult {
-        if let denied = permissionDeniedPostEvent() { return denied }
+        if let denied = permissionDeniedPostEvent() {
+            return denied
+        }
         guard let text = args.string("text") ?? args.positionals.first else {
             return .failure(code: "invalid_argument.missing_text", message: "--text is required.", exitCode: 2)
         }
@@ -106,7 +126,9 @@ enum PBMInput {
     }
 
     static func press(args: PBMArguments) -> PBMExecutionResult {
-        if let denied = permissionDeniedPostEvent() { return denied }
+        if let denied = permissionDeniedPostEvent() {
+            return denied
+        }
         guard let key = args.string("key") ?? args.positionals.first else {
             return .failure(code: "invalid_argument.missing_key", message: "--key is required.", exitCode: 2)
         }
@@ -118,7 +140,9 @@ enum PBMInput {
     }
 
     static func paste() -> PBMExecutionResult {
-        if let denied = permissionDeniedPostEvent() { return denied }
+        if let denied = permissionDeniedPostEvent() {
+            return denied
+        }
         postKey(code: 0x09, modifiers: .maskCommand)
         return .success(["keys": "cmd+v", "strategy": "CGEvent"])
     }
@@ -307,7 +331,9 @@ enum PBMHotkeyKey {
 
 extension PBMInput {
     static func hotkey(args: PBMArguments) -> PBMExecutionResult {
-        if let denied = permissionDeniedPostEvent() { return denied }
+        if let denied = permissionDeniedPostEvent() {
+            return denied
+        }
         guard let plan = PBMHotkeyKey.plan(args.string("keys") ?? args.positionals.first ?? "") else {
             return .failure(code: "invalid_argument.unknown_hotkey", message: "--keys like cmd+shift+p is required.", exitCode: 2)
         }
@@ -323,11 +349,21 @@ extension PBMInput {
 
     private static func modifierNames(_ flags: CGEventFlags) -> [String] {
         var output: [String] = []
-        if flags.contains(.maskCommand) { output.append("cmd") }
-        if flags.contains(.maskControl) { output.append("ctrl") }
-        if flags.contains(.maskAlternate) { output.append("alt") }
-        if flags.contains(.maskShift) { output.append("shift") }
-        if flags.contains(.maskSecondaryFn) { output.append("fn") }
+        if flags.contains(.maskCommand) {
+            output.append("cmd")
+        }
+        if flags.contains(.maskControl) {
+            output.append("ctrl")
+        }
+        if flags.contains(.maskAlternate) {
+            output.append("alt")
+        }
+        if flags.contains(.maskShift) {
+            output.append("shift")
+        }
+        if flags.contains(.maskSecondaryFn) {
+            output.append("fn")
+        }
         return output
     }
 }
@@ -345,14 +381,30 @@ enum PBMTargetResolver {
         }
 
         var selectors: [String] = []
-        if args.string("id") != nil || args.string("target") != nil { selectors.append("id") }
-        if targetText(args) != nil { selectors.append("text") }
-        if targetTitle(args) != nil { selectors.append("title") }
-        if (args.string("automation-id") ?? args.string("automationId")) != nil { selectors.append("automationId") }
-        if args.string("role") != nil { selectors.append("role") }
-        if args.string("app") != nil || args.string("bundle-id") != nil || args.string("bundleId") != nil { selectors.append("scope") }
-        if (args.int("window-id") ?? args.int("windowId") ?? args.int("handle")) != nil { selectors.append("window") }
-        if args.int("index") != nil { selectors.append("index") }
+        if args.string("id") != nil || args.string("target") != nil {
+            selectors.append("id")
+        }
+        if targetText(args) != nil {
+            selectors.append("text")
+        }
+        if targetTitle(args) != nil {
+            selectors.append("title")
+        }
+        if (args.string("automation-id") ?? args.string("automationId")) != nil {
+            selectors.append("automationId")
+        }
+        if args.string("role") != nil {
+            selectors.append("role")
+        }
+        if args.string("app") != nil || args.string("bundle-id") != nil || args.string("bundleId") != nil {
+            selectors.append("scope")
+        }
+        if (args.int("window-id") ?? args.int("windowId") ?? args.int("handle")) != nil {
+            selectors.append("window")
+        }
+        if args.int("index") != nil {
+            selectors.append("index")
+        }
         if selectors.isEmpty {
             return allowMissing ? (nil, nil) : (nil, nil)
         }

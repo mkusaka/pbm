@@ -591,7 +591,9 @@ enum PBMVideoRecorder {
             semaphore.signal()
         }
         _ = semaphore.wait(timeout: .now() + 10)
-        if let output = box.output { return output }
+        if let output = box.output {
+            return output
+        }
         throw box.outputError ?? PBMError.internalFailure("Timed out waiting for ScreenCaptureKit content.")
     }
 
