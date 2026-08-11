@@ -240,8 +240,12 @@ enum PBMApp {
         let bundleID = args.string("bundle-id") ?? args.string("bundleId")
         let name = args.string("name") ?? args.positionals.first
         return NSWorkspace.shared.runningApplications.first { app in
-            if let bundleID, app.bundleIdentifier == bundleID { return true }
-            if let name, (app.localizedName ?? "").localizedCaseInsensitiveContains(name) { return true }
+            if let bundleID, app.bundleIdentifier == bundleID {
+                return true
+            }
+            if let name, (app.localizedName ?? "").localizedCaseInsensitiveContains(name) {
+                return true
+            }
             return false
         }
     }
@@ -278,7 +282,9 @@ enum PBMWindow {
 
     static func focus(args: PBMArguments) -> PBMExecutionResult {
         let resolved = resolveWindow(args: args)
-        if let error = resolved.error { return error }
+        if let error = resolved.error {
+            return error
+        }
         guard let target = resolved.target else {
             return .failure(code: "target_not_found", message: "Window was not found.")
         }
@@ -296,7 +302,9 @@ enum PBMWindow {
             return PBMAX.permissionDeniedAccessibility()
         }
         let resolved = resolveWindow(args: args)
-        if let error = resolved.error { return error }
+        if let error = resolved.error {
+            return error
+        }
         guard let target = resolved.target, let axWindow = axWindow(args: args, target: target) else {
             return .failure(code: "target_not_found", message: "Window was not found.")
         }
@@ -305,14 +313,18 @@ enum PBMWindow {
             var point = CGPoint(x: x, y: y)
             if let value = AXValueCreate(.cgPoint, &point) {
                 let result = AXUIElementSetAttributeValue(axWindow, kAXPositionAttribute as CFString, value)
-                if result == .success { performed.append("position") }
+                if result == .success {
+                    performed.append("position")
+                }
             }
         }
         if !moveOnly, let width = args.double("width"), let height = args.double("height") {
             var size = CGSize(width: width, height: height)
             if let value = AXValueCreate(.cgSize, &size) {
                 let result = AXUIElementSetAttributeValue(axWindow, kAXSizeAttribute as CFString, value)
-                if result == .success { performed.append("size") }
+                if result == .success {
+                    performed.append("size")
+                }
             }
         }
         if performed.isEmpty {
@@ -326,7 +338,9 @@ enum PBMWindow {
             return PBMAX.permissionDeniedAccessibility()
         }
         let resolved = resolveWindow(args: args)
-        if let error = resolved.error { return error }
+        if let error = resolved.error {
+            return error
+        }
         guard let target = resolved.target, let axWindow = axWindow(args: args, target: target) else {
             return .failure(code: "target_not_found", message: "Window was not found.")
         }
@@ -342,7 +356,9 @@ enum PBMWindow {
             return PBMAX.permissionDeniedAccessibility()
         }
         let resolved = resolveWindow(args: args)
-        if let error = resolved.error { return error }
+        if let error = resolved.error {
+            return error
+        }
         guard let target = resolved.target, let axWindow = axWindow(args: args, target: target) else {
             return .failure(code: "target_not_found", message: "Window was not found.")
         }
@@ -358,7 +374,9 @@ enum PBMWindow {
             return PBMAX.permissionDeniedAccessibility()
         }
         let resolved = resolveWindow(args: args)
-        if let error = resolved.error { return error }
+        if let error = resolved.error {
+            return error
+        }
         guard let target = resolved.target, let axWindow = axWindow(args: args, target: target) else {
             return .failure(code: "target_not_found", message: "Window was not found.")
         }

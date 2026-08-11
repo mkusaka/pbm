@@ -114,10 +114,18 @@ enum PBMConfigCommands {
     }
 
     private static func coerce(_ value: String) -> Any {
-        if ["true", "yes", "on"].contains(value.lowercased()) { return true }
-        if ["false", "no", "off"].contains(value.lowercased()) { return false }
-        if let int = Int(value) { return int }
-        if let double = Double(value), value.contains(".") { return double }
+        if ["true", "yes", "on"].contains(value.lowercased()) {
+            return true
+        }
+        if ["false", "no", "off"].contains(value.lowercased()) {
+            return false
+        }
+        if let int = Int(value) {
+            return int
+        }
+        if let double = Double(value), value.contains(".") {
+            return double
+        }
         return value
     }
 }

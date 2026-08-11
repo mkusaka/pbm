@@ -240,10 +240,18 @@ public struct PBMArguments {
 
     private static func coerce(_ value: String) -> Any {
         let lower = value.lowercased()
-        if ["true", "yes", "on"].contains(lower) { return true }
-        if ["false", "no", "off"].contains(lower) { return false }
-        if let int = Int(value) { return int }
-        if let double = Double(value), value.contains(".") { return double }
+        if ["true", "yes", "on"].contains(lower) {
+            return true
+        }
+        if ["false", "no", "off"].contains(lower) {
+            return false
+        }
+        if let int = Int(value) {
+            return int
+        }
+        if let double = Double(value), value.contains(".") {
+            return double
+        }
         return value
     }
 }

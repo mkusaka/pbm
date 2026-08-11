@@ -205,7 +205,9 @@ final class UnixSocketServer {
     }
 
     deinit {
-        if let acceptedFD { close(acceptedFD) }
+        if let acceptedFD {
+            close(acceptedFD)
+        }
         close(fd)
     }
 
