@@ -2,7 +2,7 @@
   automerge: true,
   minimumReleaseAge: "7 days",
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
-  extends: ["config:best-practices"],
+  extends: ["config:best-practices", "customManagers:githubActionsVersions"],
   platformAutomerge: false,
   packageRules: [
     {
