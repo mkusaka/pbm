@@ -28,7 +28,7 @@ jobs:
           test "$(swift package tools-version)" = "6.2.0"
       - uses: jdx/mise-action@8418fedb1110381a0d3ba51a7a415d7c1b884550 # v5.2.2
         with:
-          version: 2026.10.17
+          version: 2026.10.18
           cache: true
       - name: SwiftFormat check
         run: mise exec -- swiftformat --lint .
